@@ -56,7 +56,10 @@ export function PageTurnNav({
     if (dir === 'next' && !canNext) return
     e.preventDefault()
     e.stopPropagation()
-    const width = Math.max(160, e.currentTarget.closest('.spread-host')?.clientWidth ?? 320)
+    const width = Math.max(
+      160,
+      e.currentTarget.closest('.spread-host, .shared-spread-host')?.clientWidth ?? 320,
+    )
     dragRef.current = { dir, startX: e.clientX, width, moved: false }
     setDragging(dir)
     e.currentTarget.setPointerCapture(e.pointerId)
