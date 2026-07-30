@@ -5,9 +5,10 @@
   display: grid;
   gap: 0.35rem;
   width: 68px;
-  z-index: 30;
+  /* Must stay above .binder-main; overflow:visible so panels can escape the 68px column */
+  z-index: 100;
   align-content: start;
-  overflow: auto;
+  overflow: visible;
   min-height: 0;
 }
 
@@ -54,8 +55,9 @@
 
 .tool-panel {
   position: absolute;
-  left: 82px;
+  left: calc(100% + 0.75rem);
   top: 0;
+  z-index: 100;
   width: min(280px, calc(100vw - 100px));
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -161,8 +163,9 @@
 
 .tip {
   position: absolute;
-  left: 82px;
+  left: calc(100% + 0.75rem);
   top: 0;
+  z-index: 100;
   width: 180px;
   margin: 0;
   font-size: 0.75rem;
