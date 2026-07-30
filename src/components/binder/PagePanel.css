@@ -16,6 +16,8 @@
   min-height: 0;
   align-self: stretch;
   overflow: hidden;
+  position: relative;
+  backface-visibility: hidden;
 }
 
 .page-panel.is-placeholder {
@@ -78,5 +80,6 @@
   .page-panel {
     height: auto;
     min-height: 52vh;
+    overflow: visible;
   }
 }

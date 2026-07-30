@@ -8,7 +8,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type CSSProperties, type TouchEvent as ReactTouchEvent } from 'react'
 import type { Binder, BinderPage, SlotRef } from '../../types'
 import { slotDisplayCardId } from '../../types'
 import { getCachedCard } from '../../api/prices'
@@ -23,6 +23,7 @@ import {
 import { CardImage } from '../CardImage'
 import { useTray } from '../../hooks/useTray'
 import { PagePanel, PagePlaceholder } from './PagePanel'
+import { PageTurnNav } from './PageTurnNav'
 import { TrayBar } from './TrayBar'
 import './BinderSpread.css'
 
@@ -50,7 +51,15 @@ type Props = {
   onLabelChange: (pageIndex: number, label: string) => void
   onDeletePage: (pageIndex: number) => void
   showTray?: boolean
+  canPrevPage: boolean
+  canNextPage: boolean
+  pageLabel: string
+  onPrevPage: () => void
+  onNextPage: () => void
 }
+
+const SWIPE_MIN_DX = 56
+const SWIPE_MAX_DY_RATIO = 0.75
 
 export function BinderSpread({
   binder,
@@ -76,9 +85,18 @@ export function BinderSpread({
   onLabelChange,
   onDeletePage,
   showTray = true,
+  canPrevPage,
+  canNextPage,
+  pageLabel,
+  onPrevPage,
+  onNextPage,
 }: Props) {
   const { peekItem } = useTray()
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [flipDir, setFlipDir] = useState<'prev' | 'next' | null>(null)
+  const [flipProgress, setFlipProgress] = useState(0)
+  const [turning, setTurning] = useState<'prev' | 'next' | null>(null)
+  const swipeRef = useRef<{ x: number; y: number; tracking: boolean } | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -154,6 +172,115 @@ export function BinderSpread({
     }
   }
 
+  function playTurn(dir: 'prev' | 'next', action: () => void) {
+    const reduce =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) {
+      action()
+      return
+    }
+    setTurning(dir)
+    setFlipDir(dir)
+    setFlipProgress(1)
+    window.setTimeout(() => {
+      action()
+      setTurning(null)
+      setFlipDir(null)
+      setFlipProgress(0)
+    }, 280)
+  }
+
+  function handlePrev() {
+    if (!canPrevPage) return
+    if (flipProgress > 0.2) {
+      onPrevPage()
+      setFlipDir(null)
+      setFlipProgress(0)
+      return
+    }
+    playTurn('prev', onPrevPage)
+  }
+
+  function handleNext() {
+    if (!canNextPage) return
+    if (flipProgress > 0.2) {
+      onNextPage()
+      setFlipDir(null)
+      setFlipProgress(0)
+      return
+    }
+    playTurn('next', onNextPage)
+  }
+
+  function onFlipProgress(dir: 'prev' | 'next' | null, progress: number) {
+    setFlipDir(dir)
+    setFlipProgress(progress)
+  }
+
+  function swipeTargetBlocked(target: EventTarget | null) {
+    if (!(target instanceof Element)) return true
+    return Boolean(
+      target.closest(
+        'button, input, textarea, select, a, [data-no-page-swipe], .tray-bar, .binder-slot, [draggable="true"]',
+      ),
+    )
+  }
+
+  function onTouchStart(e: ReactTouchEvent) {
+    if (activeId || e.touches.length !== 1) return
+    if (swipeTargetBlocked(e.target)) {
+      swipeRef.current = null
+      return
+    }
+    const t = e.touches[0]
+    swipeRef.current = { x: t.clientX, y: t.clientY, tracking: true }
+  }
+
+  function onTouchMove(e: ReactTouchEvent) {
+    const swipe = swipeRef.current
+    if (!swipe?.tracking || e.touches.length !== 1) return
+    const t = e.touches[0]
+    const dx = t.clientX - swipe.x
+    const dy = t.clientY - swipe.y
+    if (Math.abs(dy) > Math.abs(dx) * SWIPE_MAX_DY_RATIO && Math.abs(dy) > 24) {
+      swipe.tracking = false
+      setFlipDir(null)
+      setFlipProgress(0)
+      return
+    }
+    if (Math.abs(dx) < 12) return
+    const dir: 'prev' | 'next' = dx > 0 ? 'prev' : 'next'
+    if ((dir === 'prev' && !canPrevPage) || (dir === 'next' && !canNextPage)) {
+      setFlipDir(null)
+      setFlipProgress(0)
+      return
+    }
+    const width = Math.max(200, (e.currentTarget as HTMLElement).clientWidth)
+    const progress = Math.max(0, Math.min(1, Math.abs(dx) / (width * 0.4)))
+    setFlipDir(dir)
+    setFlipProgress(progress)
+  }
+
+  function onTouchEnd(e: ReactTouchEvent) {
+    const swipe = swipeRef.current
+    swipeRef.current = null
+    if (!swipe?.tracking) {
+      setFlipDir(null)
+      setFlipProgress(0)
+      return
+    }
+    const t = e.changedTouches[0]
+    const dx = t.clientX - swipe.x
+    const dy = t.clientY - swipe.y
+    setFlipDir(null)
+    setFlipProgress(0)
+    if (Math.abs(dx) < SWIPE_MIN_DX) return
+    if (Math.abs(dy) > Math.abs(dx) * SWIPE_MAX_DY_RATIO) return
+    if (dx < 0) handleNext()
+    else handlePrev()
+  }
+
   const pageProps = {
     binder,
     selectMode,
@@ -172,8 +299,32 @@ export function BinderSpread({
     onDeletePage,
   }
 
+  const spreadClass = [
+    'spread',
+    showTray ? 'with-tray' : '',
+    flipDir ? 'is-flipping' : '',
+    flipDir ? `is-flipping-${flipDir}` : '',
+    turning ? `is-turning-${turning}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const spreadStyle = {
+    '--flip-progress': String(flipProgress),
+  } as CSSProperties
+
   return (
-    <div className="spread-host">
+    <div
+      className="spread-host"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={() => {
+        swipeRef.current = null
+        setFlipDir(null)
+        setFlipProgress(0)
+      }}
+    >
       <DndContext
         sensors={sensors}
         collisionDetection={binderCollision}
@@ -182,7 +333,7 @@ export function BinderSpread({
         onDragEnd={onDragEnd}
         onDragCancel={onDragCancel}
       >
-        <div className={`spread ${showTray ? 'with-tray' : ''}`}>
+        <div className={spreadClass} style={spreadStyle}>
           <PagePanel page={leftPage} pageIndex={leftIndex} {...pageProps} />
 
           {showTray && <TrayBar />}
@@ -192,6 +343,15 @@ export function BinderSpread({
           ) : (
             <PagePlaceholder binder={binder} />
           )}
+
+          <PageTurnNav
+            canPrev={canPrevPage}
+            canNext={canNextPage}
+            label={pageLabel}
+            onPrev={handlePrev}
+            onNext={handleNext}
+            onFlipProgress={onFlipProgress}
+          />
         </div>
 
         <DragOverlay dropAnimation={null}>
@@ -215,3 +375,4 @@ export function BinderSpread({
     </div>
   )
 }
+

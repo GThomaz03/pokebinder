@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
 import { BinderSettings } from '../components/binder/BinderSettings'
@@ -8,11 +8,12 @@ import { PokedexPanel } from '../components/binder/PokedexPanel'
 import { ToolsSidebar } from '../components/binder/ToolsSidebar'
 import { useBinders } from '../hooks/useBinders'
 import { useInventory } from '../hooks/useInventory'
+import { useLanguage } from '../hooks/useLanguage'
 import { useTray } from '../hooks/useTray'
-import { getCachedCard } from '../api/prices'
-import { baseCardId } from '../api/tcgdex'
+import { getCachedCard, hydrateCard } from '../api/prices'
+import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { CardImage } from '../components/CardImage'
-import { getPokedexName } from '../lib/binderUtils'
+import { binderTotalBrl, getPokedexName } from '../lib/binderUtils'
 import type { SlotRef, ToolMode } from '../types'
 import { slotDisplayCardId } from '../types'
 import '../themes/binder-themes.css'
@@ -36,6 +37,7 @@ export function BinderViewPage() {
     reorderPages,
   } = useBinders()
   const { ensureOwned, ensureOwnedMany } = useInventory()
+  const { lang } = useLanguage()
   const tray = useTray()
 
   const binder = getBinder(id)
@@ -49,6 +51,7 @@ export function BinderViewPage() {
   const [dexEdit, setDexEdit] = useState<SlotRef | null>(null)
   const [detailsKey, setDetailsKey] = useState<string | null>(null)
   const [inspectRef, setInspectRef] = useState<SlotRef | null>(null)
+  const [priceTick, setPriceTick] = useState(0)
 
   const overlayOpen =
     settingsOpen || addOpen || Boolean(dexEdit) || Boolean(detailsKey)
@@ -64,6 +67,53 @@ export function BinderViewPage() {
   useEffect(() => {
     if (spreadIndex !== safeSpread) setSpreadIndex(safeSpread)
   }, [spreadIndex, safeSpread])
+
+  const canPrevPage = safeSpread > 0
+  const canExtendPages = binder?.kind === 'custom'
+  const canNextPage = safeSpread < totalSpreads - 1 || Boolean(canExtendPages)
+  const pageNavLabel = `${safeSpread + 1} / ${totalSpreads}`
+
+  const goPrevPage = useRef(() => {})
+  const goNextPage = useRef(() => {})
+  goPrevPage.current = () => {
+    if (!canPrevPage) return
+    setSpreadIndex((s) => Math.max(0, s - 1))
+  }
+  goNextPage.current = () => {
+    if (!binder) return
+    if (safeSpread < totalSpreads - 1) {
+      setSpreadIndex(safeSpread + 1)
+      return
+    }
+    if (binder.kind !== 'custom') return
+    addPages(binder.id, 2)
+    setSpreadIndex(totalSpreads)
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (overlayOpen) return
+      const target = e.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT')
+      ) {
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        goPrevPage.current()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        goNextPage.current()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [overlayOpen])
 
   const dexSlot = useMemo(() => {
     if (!binder || !dexEdit) return null
@@ -118,6 +168,42 @@ export function BinderViewPage() {
     for (const m of searchMatches) set.add(`p${m.pageIndex}-s${m.slotIndex}`)
     return set
   }, [searchMatches])
+
+  const displayCardKeysSig = useMemo(() => {
+    if (!binder) return ''
+    const keys: string[] = []
+    for (const page of binder.pages) {
+      for (const slot of page.slots) {
+        const id = slotDisplayCardId(slot)
+        if (id) keys.push(id)
+      }
+    }
+    return keys.join('\n')
+  }, [binder])
+
+  useEffect(() => {
+    if (!displayCardKeysSig) return
+    const keys = displayCardKeysSig.split('\n')
+    let cancelled = false
+    void Promise.all(
+      keys.map((key) => {
+        const { lang: keyLang } = parseOwnedKey(key)
+        return hydrateCard(keyLang ?? lang, key, Boolean(keyLang))
+      }),
+    ).then(() => {
+      if (!cancelled) setPriceTick((t) => t + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [displayCardKeysSig, lang])
+
+  const totalValueLabel = useMemo(() => {
+    if (!binder) return null
+    void priceTick
+    const total = binderTotalBrl(binder)
+    return total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  }, [binder, priceTick])
 
   const inspectSlot = inspectRef && binder
     ? binder.pages[inspectRef.pageIndex]?.slots[inspectRef.slotIndex]
@@ -209,6 +295,14 @@ export function BinderViewPage() {
         <h1>{binder.name}</h1>
         <div className="view-actions">
           <span className="kind-pill">{kindLabel}</span>
+          {totalValueLabel && (
+            <span
+              className="binder-total"
+              title={`Soma dos preços (${binder.settings.priceMarket === 'tcgplayer' ? 'TCGPlayer' : 'Cardmarket'})`}
+            >
+              Total {totalValueLabel}
+            </span>
+          )}
           <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)}>
             Configurações
           </button>
@@ -241,7 +335,7 @@ export function BinderViewPage() {
           <div className="pager" role="navigation" aria-label="Páginas do fichário">
             <button
               type="button"
-              disabled={safeSpread <= 0}
+              disabled={!canPrevPage}
               onClick={() => setSpreadIndex(0)}
               aria-label="Primeira abertura"
             >
@@ -249,20 +343,23 @@ export function BinderViewPage() {
             </button>
             <button
               type="button"
-              disabled={safeSpread <= 0}
-              onClick={() => setSpreadIndex((s) => Math.max(0, s - 1))}
+              disabled={!canPrevPage}
+              onClick={() => goPrevPage.current()}
               aria-label="Abertura anterior"
             >
               ‹
             </button>
-            <span aria-live="polite">
-              {safeSpread + 1} / {totalSpreads}
-            </span>
+            <span aria-live="polite">{pageNavLabel}</span>
             <button
               type="button"
-              disabled={safeSpread >= totalSpreads - 1}
-              onClick={() => setSpreadIndex((s) => Math.min(totalSpreads - 1, s + 1))}
+              disabled={!canNextPage}
+              onClick={() => goNextPage.current()}
               aria-label="Próxima abertura"
+              title={
+                canExtendPages && safeSpread >= totalSpreads - 1
+                  ? 'Adiciona uma nova abertura e salva'
+                  : undefined
+              }
             >
               ›
             </button>
@@ -282,6 +379,11 @@ export function BinderViewPage() {
             rightPage={rightPage}
             leftIndex={leftIndex}
             rightIndex={rightIndex}
+            canPrevPage={canPrevPage}
+            canNextPage={canNextPage}
+            pageLabel={pageNavLabel}
+            onPrevPage={() => goPrevPage.current()}
+            onNextPage={() => goNextPage.current()}
             selectMode={toolMode === 'select'}
             selected={selected}
             searchHits={toolMode === 'search' ? searchHits : undefined}

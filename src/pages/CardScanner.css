@@ -1,0 +1,346 @@
+.scan-page {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: #050607;
+  color: var(--text);
+  font-family: var(--font);
+}
+
+.scan-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: linear-gradient(180deg, rgba(5, 6, 7, 0.92), rgba(5, 6, 7, 0.55));
+  z-index: 2;
+}
+
+.scan-close {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--danger);
+  color: #fff;
+  text-decoration: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.scan-status {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.scan-status span {
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.scan-status small {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.scan-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.scan-icon-btn {
+  appearance: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--btn-radius);
+}
+
+.scan-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.scan-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.scan-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+  font-weight: 650;
+  padding: 1.25rem;
+  text-align: center;
+  z-index: 2;
+}
+
+.scan-loading p {
+  margin: 0;
+  max-width: 28ch;
+  line-height: 1.4;
+}
+
+.scan-loading-hint {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 32ch;
+}
+
+.scan-enable-btn {
+  appearance: none;
+  border: 1px solid #3d7a55;
+  background: var(--success);
+  color: #0c0e12;
+  font-weight: 750;
+  padding: 0.85rem 1.4rem;
+  border-radius: var(--btn-radius);
+  box-shadow: var(--shadow);
+  font-size: 1rem;
+}
+
+.scan-enable-btn:disabled {
+  opacity: 0.7;
+}
+
+.scan-capture-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 1.25rem;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  pointer-events: none;
+}
+
+.scan-hint-inline {
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  background: rgba(12, 14, 18, 0.75);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.scan-capture-btn {
+  pointer-events: auto;
+  appearance: none;
+  min-width: 9.5rem;
+  min-height: 3.4rem;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  background: var(--success);
+  color: #0c0e12;
+  font-weight: 800;
+  font-size: 1.05rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.scan-capture-btn:disabled {
+  opacity: 0.65;
+}
+
+.scan-sheet .scan-ocr-debug {
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.scan-history {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 7.5rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.35rem;
+  max-height: 40vh;
+  overflow: hidden;
+}
+
+.scan-history-thumb {
+  width: 48px;
+  height: 66px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.scan-history-thumb img,
+.scan-history-thumb picture {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scan-sheet {
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem calc(0.85rem + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(18, 21, 27, 0.92), #12151b 40%);
+  border-top: 1px solid var(--border-strong);
+  align-items: start;
+}
+
+.scan-sheet-art {
+  width: 72px;
+  aspect-ratio: 63 / 88;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--slot);
+}
+
+.scan-sheet-art img,
+.scan-sheet-art picture {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scan-sheet-ph {
+  width: 100%;
+  height: 100%;
+  background: var(--surface-2);
+}
+
+.scan-sheet-body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.scan-sheet-body strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.scan-sheet-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.scan-source {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--chrome);
+  border: 1px solid var(--border);
+  padding: 0.05rem 0.35rem;
+}
+
+.scan-sheet-price {
+  color: var(--success);
+  font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-sheet-qty {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.scan-sheet-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.scan-add {
+  appearance: none;
+  border: 1px solid #3d7a55;
+  background: var(--success);
+  color: #0c0e12;
+  font-weight: 700;
+  padding: 0.55rem 1rem;
+  border-radius: var(--btn-radius);
+}
+
+.scan-dismiss {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--btn-radius);
+}
+
+.scan-toast {
+  position: absolute;
+  top: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  padding: 0.5rem 0.85rem;
+  font-weight: 650;
+  font-size: 0.9rem;
+  max-width: min(90vw, 320px);
+  text-align: center;
+}
+
+.scan-manual-hint {
+  margin: 0;
+  padding: 0.65rem 1rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.scan-manual-modal .add-body {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 720px) {
+  .scan-sheet {
+    grid-template-columns: 96px 1fr;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+
+  .scan-sheet-art {
+    width: 96px;
+  }
+}

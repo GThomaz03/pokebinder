@@ -46,6 +46,14 @@
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+@media (max-width: 900px) {
+  .binder-view {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
 .binder-view h1,
 .binder-view h2,
 .binder-view h3 {
@@ -124,6 +132,7 @@
 .binder-view[data-binder-theme='mesa'] .inspect-name,
 .binder-view[data-binder-theme='mesa'] .inspect-set,
 .binder-view[data-binder-theme='mesa'] .price-tag,
+.binder-view[data-binder-theme='mesa'] .binder-total,
 .binder-view[data-binder-theme='mesa'] .pager span {
   font-family: var(--font-mono);
 }

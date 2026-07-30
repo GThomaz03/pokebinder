@@ -5,25 +5,34 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "tunnel": "npx --yes localtunnel --port 5173",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "scan:embeddings": "node scripts/build-card-embeddings.mjs",
+    "scan:set-index": "node scripts/build-set-index.mjs",
+    "scan:models": "node scripts/fetch-scan-models.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.111.0",
     "@tcgdex/sdk": "^2.9.0",
+    "@xenova/transformers": "^2.17.2",
+    "onnxruntime-web": "^1.27.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
+    "sharp": "^0.35.3",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   }

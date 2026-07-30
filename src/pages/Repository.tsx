@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatPrice, getCachedCard, hydrateCard } from '../api/prices'
 import { baseCardId } from '../api/tcgdex'
+import { AddCardsModal } from '../components/binder/AddCardsModal'
 import { CardImage } from '../components/CardImage'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
@@ -12,6 +13,7 @@ export function RepositoryPage() {
   const { lang } = useLanguage()
   const [query, setQuery] = useState('')
   const [tick, setTick] = useState(0)
+  const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -56,12 +58,17 @@ export function RepositoryPage() {
             automaticamente com pelo menos 1.
           </p>
         </div>
-        <input
-          type="search"
-          placeholder="Buscar no repositório…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <div className="repo-head-actions">
+          <button type="button" className="repo-add-btn" onClick={() => setAddOpen(true)}>
+            + Adicionar cartas
+          </button>
+          <input
+            type="search"
+            placeholder="Buscar no repositório…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
       </header>
 
       <section className="set-progress">
@@ -125,6 +132,15 @@ export function RepositoryPage() {
           })}
         </div>
       </section>
+
+      <AddCardsModal
+        open={addOpen}
+        inventoryMode
+        onClose={() => setAddOpen(false)}
+        onAdd={(cardIds) => {
+          for (const id of cardIds) addQty(id, 1)
+        }}
+      />
     </div>
   )
 }

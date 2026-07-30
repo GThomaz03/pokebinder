@@ -1,12 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { LANG_OPTIONS } from '../i18n'
 import { useAuth } from '../hooks/useAuth'
 import { useCloudSync } from '../hooks/useCloudSync'
-import { useLanguage } from '../hooks/useLanguage'
 import './Layout.css'
 
 export function Layout() {
-  const { lang, setLang } = useLanguage()
   const { user, isAuthenticated, openAuth, signOut, isConfigured } = useAuth()
   const { syncing, lastSyncError, cloudReady } = useCloudSync()
 
@@ -24,23 +21,10 @@ export function Layout() {
           </NavLink>
           <NavLink to="/decks">Decks</NavLink>
           <NavLink to="/repository">Repositório</NavLink>
+          <NavLink to="/calculadora">Calculadora</NavLink>
         </nav>
 
         <div className="topbar-end">
-          <label className="lang-select">
-            <span className="sr-only">Idioma das cartas</span>
-            <select
-              value={lang}
-              onChange={(e) => setLang(e.target.value as typeof lang)}
-            >
-              {LANG_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.short} — {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
           {isConfigured && (
             <div className="auth-controls">
               {isAuthenticated ? (

@@ -12,6 +12,7 @@ type Brief = {
   name: string
   localId: string | number
   image?: string
+  setId?: string
 }
 
 type Props = {
@@ -19,6 +20,8 @@ type Props = {
   onClose: () => void
   onAdd: (cardIds: string[]) => void
   replaceMode?: boolean
+  /** Hide binder-only “add to current page” checkbox (e.g. repository). */
+  inventoryMode?: boolean
 }
 
 type SearchCache = {
@@ -30,7 +33,23 @@ type SearchCache = {
 /** Module-level cache so reopening the modal does not refetch the last search. */
 let lastSearch: SearchCache | null = null
 
-export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
+function searchPlaceholder(lang: CardLang): string {
+  if (lang === 'ja') return 'Nome (JP/EN) ou numeração (ex: ピカチュウ, 009/094)…'
+  return 'Nome ou numeração (ex: Pikachu, 25, #025, 009/094)…'
+}
+
+function setLabel(card: Brief): string {
+  const setId = card.setId ?? card.id.slice(0, card.id.lastIndexOf('-'))
+  return `#${card.localId}${setId ? ` · ${setId}` : ''}`
+}
+
+export function AddCardsModal({
+  open,
+  onClose,
+  onAdd,
+  replaceMode,
+  inventoryMode = false,
+}: Props) {
   const { lang, setLang } = useLanguage()
   const [query, setQuery] = useState(lastSearch?.query ?? '')
   const [results, setResults] = useState<Brief[]>(() =>
@@ -40,30 +59,19 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
   const [loading, setLoading] = useState(false)
   const [addToCurrent, setAddToCurrent] = useState(true)
   const reqId = useRef(0)
+  const queryRef = useRef(query)
+  queryRef.current = query
 
-  useEffect(() => {
-    if (!open) {
-      setSelected([])
+  async function runSearch(nextQuery: string, nextLang: CardLang) {
+    const q = nextQuery.trim()
+    if (!q) {
+      setResults([])
       return
     }
-    // Restore cached results for this language when reopening.
-    if (lastSearch && lastSearch.lang === lang) {
-      setQuery(lastSearch.query)
-      setResults(lastSearch.results)
-    }
-  }, [open, lang])
 
-  if (!open) return null
-
-  async function onSearch(e: FormEvent) {
-    e.preventDefault()
-    const q = query.trim()
-    if (!q) return
-
-    // Same query+lang already loaded — skip network.
     if (
       lastSearch &&
-      lastSearch.lang === lang &&
+      lastSearch.lang === nextLang &&
       lastSearch.query === q &&
       lastSearch.results.length > 0
     ) {
@@ -74,16 +82,44 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
     const id = ++reqId.current
     setLoading(true)
     try {
-      const data = (await searchCards(lang, q)) as Brief[]
+      const data = (await searchCards(nextLang, q)) as Brief[]
       if (id !== reqId.current) return
       setResults(data)
-      lastSearch = { lang, query: q, results: data }
+      lastSearch = { lang: nextLang, query: q, results: data }
     } catch {
       if (id !== reqId.current) return
       setResults([])
     } finally {
       if (id === reqId.current) setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    if (!open) {
+      setSelected([])
+      return
+    }
+    // Restore cache for same lang, otherwise re-run with current query.
+    if (lastSearch && lastSearch.lang === lang) {
+      setQuery(lastSearch.query)
+      setResults(lastSearch.results)
+      return
+    }
+    const q = queryRef.current.trim()
+    if (q) {
+      setResults([])
+      void runSearch(q, lang)
+    } else {
+      setResults([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reopen / lang change
+  }, [open, lang])
+
+  if (!open) return null
+
+  function onSearch(e: FormEvent) {
+    e.preventDefault()
+    void runSearch(query, lang)
   }
 
   function toggleSelect(card: Brief) {
@@ -112,7 +148,13 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <header className="add-head">
-          <h2>{replaceMode ? 'Trocar carta' : 'Adicionar cartas'}</h2>
+          <h2>
+            {replaceMode
+              ? 'Trocar carta'
+              : inventoryMode
+                ? 'Adicionar ao repositório'
+                : 'Adicionar cartas'}
+          </h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Fechar">
             ×
           </button>
@@ -135,7 +177,7 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nome…"
+              placeholder={searchPlaceholder(lang)}
               autoFocus
             />
             <button type="submit">Buscar</button>
@@ -146,7 +188,9 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
           <div className="add-results">
             {loading && <p className="state">Buscando…</p>}
             {!loading && results.length === 0 && (
-              <p className="state">Digite um nome e busque cartas (PT / EN / JA).</p>
+              <p className="state">
+                Busque por nome ou numeração da carta (PT / EN / JA).
+              </p>
             )}
             <div className="result-grid">
               {results.map((card) => {
@@ -163,7 +207,7 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
                     />
                     <div>
                       <strong>{card.name}</strong>
-                      <span>#{card.localId}</span>
+                      <span>{setLabel(card)}</span>
                     </div>
                     <button type="button" onClick={() => toggleSelect(card)}>
                       {isSel ? 'Selecionada' : 'Adicionar'}
@@ -194,7 +238,7 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
         </div>
 
         <footer className="add-foot">
-          {!replaceMode && (
+          {!replaceMode && !inventoryMode && (
             <label className="check">
               <input
                 type="checkbox"
@@ -205,6 +249,9 @@ export function AddCardsModal({ open, onClose, onAdd, replaceMode }: Props) {
             </label>
           )}
           {replaceMode && <span className="state small">Selecione uma carta para o slot.</span>}
+          {inventoryMode && !replaceMode && (
+            <span className="state small">As cartas entram no repositório com quantidade 1.</span>
+          )}
           <button
             type="button"
             className="primary"

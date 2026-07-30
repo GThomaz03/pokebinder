@@ -1,5 +1,6 @@
+import { getCachedPrice, priceToBrl } from '../api/prices'
 import type { Binder, BinderPage, GridLayout, Slot } from '../types'
-import { defaultSettings, slotsPerPage } from '../types'
+import { defaultSettings, slotDisplayCardId, slotsPerPage } from '../types'
 import pokedex from '../data/pokedex.json'
 
 export type PokedexEntry = { id: number; name: string }
@@ -204,6 +205,20 @@ export function cardCount(binder: Binder): { filled: number; total: number } {
     }
   }
   return { filled, total }
+}
+
+/** Sum of cached card prices in BRL using the binder's selected market. */
+export function binderTotalBrl(binder: Binder): number {
+  let total = 0
+  for (const page of binder.pages) {
+    for (const slot of page.slots) {
+      const id = slotDisplayCardId(slot)
+      if (!id) continue
+      const brl = priceToBrl(getCachedPrice(id), binder.settings.priceMarket)
+      if (brl != null) total += brl
+    }
+  }
+  return total
 }
 
 export function getPokedexName(dexId: number): string {

@@ -164,5 +164,6 @@
 
   .tray-thumb {
     width: 48px;
+    touch-action: pan-y;
   }
 }

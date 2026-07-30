@@ -37,6 +37,12 @@
   gap: 0.45rem;
 }
 
+.spread.is-flipping,
+.spread.is-turning-next,
+.spread.is-turning-prev {
+  overflow: visible;
+}
+
 .drag-ghost {
   width: 100px;
   aspect-ratio: 63 / 88;
@@ -75,7 +81,7 @@
   }
 
   .spread.with-tray .tray-bar {
-    order: 3;
+    order: 4;
     min-height: 5.5rem;
     height: auto;
   }

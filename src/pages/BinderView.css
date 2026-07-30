@@ -56,6 +56,18 @@
   color: var(--muted);
 }
 
+.binder-total {
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--chip-radius, 4px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .btn-ghost {
   appearance: none;
   border: 1px solid var(--border-strong);
@@ -202,6 +214,10 @@
 }
 
 @media (max-width: 900px) {
+  .pager {
+    display: none;
+  }
+
   .binder-view.has-batch .fab {
     bottom: 4.75rem;
   }
@@ -245,7 +261,7 @@
 
 @media (max-width: 900px) {
   .binder-view {
-    overflow: auto;
+    overflow: visible;
     height: auto;
     max-height: none;
     flex: 1 1 auto;
@@ -255,20 +271,17 @@
     grid-template-columns: 1fr;
     flex: 1 1 auto;
     overflow: visible;
+    min-height: 0;
   }
 
   .binder-main {
     height: auto;
+    overflow: visible;
   }
 
   .binder-main > .spread-host {
     flex: 1 1 auto;
     height: auto;
-  }
-
-  .app-shell:has(.binder-view) {
-    height: auto;
-    max-height: none;
-    overflow: auto;
+    min-height: 0;
   }
 }

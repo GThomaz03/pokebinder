@@ -1,0 +1,164 @@
+/* Desktop: edge handles to drag-flip like a book */
+.page-flip-handle {
+  appearance: none;
+  position: absolute;
+  top: 50%;
+  z-index: 30;
+  transform: translateY(-50%);
+  width: 2.1rem;
+  height: min(42%, 11rem);
+  min-height: 4.5rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent) 8%);
+  color: var(--text);
+  cursor: grab;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+  box-shadow: var(--shadow, 0 6px 16px rgba(0, 0, 0, 0.2));
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.page-flip-handle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface) 80%, var(--accent) 20%);
+  border-color: var(--accent);
+}
+
+.page-flip-handle:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.page-flip-handle.is-dragging {
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--surface) 70%, var(--accent) 30%);
+  border-color: var(--accent);
+}
+
+.page-flip-handle--prev {
+  left: 0.15rem;
+  border-radius: 0 10px 10px 0;
+  border-left: 0;
+}
+
+.page-flip-handle--next {
+  right: 0.15rem;
+  border-radius: 10px 0 0 10px;
+  border-right: 0;
+}
+
+.page-flip-handle__icon {
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Mobile bar between pages and tray */
+.page-turn-mobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.15rem;
+  flex-shrink: 0;
+}
+
+.page-turn-mobile__btn {
+  appearance: none;
+  flex: 1 1 0;
+  min-height: 2.4rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--btn-radius, 4px);
+  font-weight: 750;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.55rem;
+}
+
+.page-turn-mobile__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.page-turn-mobile__btn:not(:disabled):active {
+  background: color-mix(in srgb, var(--surface) 75%, var(--accent) 25%);
+}
+
+.page-turn-mobile__label {
+  flex: 0 0 auto;
+  min-width: 3.75rem;
+  text-align: center;
+  font-weight: 750;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Book flip visual while dragging / animating */
+.spread.is-flipping {
+  perspective: 1400px;
+}
+
+.spread.is-flipping-next .page-panel:last-of-type,
+.spread.is-flipping-next .page-placeholder {
+  transform-origin: left center;
+  transform: rotateY(calc(var(--flip-progress, 0) * -105deg));
+  box-shadow: calc(var(--flip-progress, 0) * -12px) 0 24px rgba(0, 0, 0, 0.28);
+  z-index: 2;
+  will-change: transform;
+}
+
+.spread.is-flipping-prev .page-panel:first-of-type {
+  transform-origin: right center;
+  transform: rotateY(calc(var(--flip-progress, 0) * 105deg));
+  box-shadow: calc(var(--flip-progress, 0) * 12px) 0 24px rgba(0, 0, 0, 0.28);
+  z-index: 2;
+  will-change: transform;
+}
+
+.spread.is-turning-next .page-panel:last-of-type,
+.spread.is-turning-next .page-placeholder,
+.spread.is-turning-prev .page-panel:first-of-type {
+  transition: transform 0.32s ease, box-shadow 0.32s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spread.is-flipping-next .page-panel:last-of-type,
+  .spread.is-flipping-next .page-placeholder,
+  .spread.is-flipping-prev .page-panel:first-of-type,
+  .spread.is-turning-next .page-panel:last-of-type,
+  .spread.is-turning-next .page-placeholder,
+  .spread.is-turning-prev .page-panel:first-of-type {
+    transition: none;
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .page-flip-handle {
+    display: none;
+  }
+
+  .page-turn-mobile {
+    display: flex;
+    order: 3;
+  }
+
+  .spread.with-tray .tray-bar {
+    order: 4;
+  }
+}
+
+@media (min-width: 901px) {
+  .page-turn-mobile {
+    display: none !important;
+  }
+}

@@ -259,3 +259,10 @@
   background: rgba(220, 38, 38, 0.9);
   color: white;
 }
+
+@media (max-width: 900px) {
+  /* Allow vertical page scroll when dragging starts on a card */
+  .b-slot {
+    touch-action: pan-y;
+  }
+}

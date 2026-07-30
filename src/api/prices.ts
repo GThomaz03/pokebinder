@@ -87,23 +87,31 @@ export function seedCardBrief(brief: {
   localId: string | number
   image?: string
   price?: CardPrice
+  setId?: string
+  setName?: string
 }): CachedCard {
   const id = baseCardId(brief.id)
   const existing = cardCache[id]
-  if (existing && existing.price.updated) return existing
+  const image = brief.image
+    ? brief.image.includes('/high.') || brief.image.includes('/low.')
+      ? brief.image
+      : cardImageUrl(brief.image, 'high')
+    : existing?.image
   const cached: CachedCard = {
     id,
-    name: brief.name,
-    localId: String(brief.localId),
-    image: brief.image
-      ? brief.image.includes('/high.') || brief.image.includes('/low.')
-        ? brief.image
-        : cardImageUrl(brief.image, 'high')
-      : undefined,
-    price: brief.price ?? { updated: 0 },
+    name: brief.name || existing?.name || id,
+    localId: String(brief.localId ?? existing?.localId ?? ''),
+    image,
+    setId: brief.setId ?? existing?.setId,
+    setName: brief.setName ?? existing?.setName,
+    price: brief.price?.updated ? brief.price : existing?.price ?? { updated: 0 },
+    illustrator: existing?.illustrator,
+    rarity: existing?.rarity,
+    types: existing?.types,
+    dexId: existing?.dexId,
   }
   cardCache = { ...cardCache, [id]: cached }
-  if (brief.price) {
+  if (brief.price?.updated) {
     priceCache = { ...priceCache, [brief.id]: brief.price, [id]: brief.price }
     persistPrices()
   }
@@ -116,16 +124,35 @@ export function cacheVariantPrice(key: string, price: CardPrice) {
   persistPrices()
 }
 
+function amountInBrl(
+  price: CardPrice,
+  market: PriceMarket,
+  fx: { eurToBrl: number; usdToBrl: number; updated?: number },
+): number | null {
+  const rates = { eurToBrl: fx.eurToBrl, usdToBrl: fx.usdToBrl, updated: fx.updated ?? 0 }
+  return (
+    market === 'cardmarket'
+      ? toBrl(price.eur, 'EUR', rates) ?? toBrl(price.usd, 'USD', rates)
+      : toBrl(price.usd, 'USD', rates) ?? toBrl(price.eur, 'EUR', rates)
+  ) ?? null
+}
+
+/** Numeric BRL value using last known FX (or fallback). */
+export function priceToBrl(
+  price: CardPrice | undefined,
+  market: PriceMarket = 'cardmarket',
+): number | null {
+  if (!price) return null
+  return amountInBrl(price, market, memoryFx())
+}
+
 export async function formatPriceBrl(
   price: CardPrice | undefined,
   market: PriceMarket = 'cardmarket',
 ): Promise<string | null> {
   if (!price) return null
   const fx = await getFxRates()
-  const brl =
-    market === 'cardmarket'
-      ? toBrl(price.eur, 'EUR', fx) ?? toBrl(price.usd, 'USD', fx)
-      : toBrl(price.usd, 'USD', fx) ?? toBrl(price.eur, 'EUR', fx)
+  const brl = amountInBrl(price, market, fx)
   if (brl == null) return null
   return brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -135,12 +162,7 @@ export function formatPrice(
   price: CardPrice | undefined,
   market: PriceMarket = 'cardmarket',
 ): string | null {
-  if (!price) return null
-  const fx = memoryFx()
-  const brl =
-    market === 'cardmarket'
-      ? toBrl(price.eur, 'EUR', fx) ?? toBrl(price.usd, 'USD', fx)
-      : toBrl(price.usd, 'USD', fx) ?? toBrl(price.eur, 'EUR', fx)
+  const brl = priceToBrl(price, market)
   if (brl == null) return null
   return brl.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }

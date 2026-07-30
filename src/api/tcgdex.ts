@@ -8,6 +8,7 @@ export type CardBrief = {
   name: string
   localId: string | number
   image?: string
+  setId?: string
 }
 
 export type CardVariantEntry = {
@@ -216,10 +217,243 @@ export async function fetchSets(lang: CardLang) {
   )
 }
 
-export async function searchCards(lang: CardLang, name: string, page = 1) {
+function localIdVariants(localId: string): string[] {
+  const raw = localId.trim()
+  const digits = raw.replace(/\D/g, '')
+  const suffix = raw.replace(/[\d#\s]/g, '')
+  const n = String(Number(digits || raw))
+  if (!n || n === 'NaN') return [raw]
+  return [
+    ...new Set([
+      raw,
+      n + suffix,
+      n.padStart(2, '0') + suffix,
+      n.padStart(3, '0') + suffix,
+    ]),
+  ]
+}
+
+function localIdMatches(cardLocalId: string | number, queryLocalId: string): boolean {
+  const card = String(cardLocalId)
+  const qDigits = queryLocalId.replace(/\D/g, '')
+  const cDigits = card.replace(/\D/g, '')
+  const qSuffix = queryLocalId.replace(/[\d#\s]/g, '').toLowerCase()
+  const cSuffix = card.replace(/[\d#\s]/g, '').toLowerCase()
+  if (qSuffix !== cSuffix) return false
+  if (!qDigits || !cDigits) return card.toLowerCase() === queryLocalId.toLowerCase()
+  if (String(Number(cDigits)) !== String(Number(qDigits))) return false
+  // "009" must not match old "9" — keep zero-padding / width when the user typed it
+  if (qDigits.length >= 3 || /^0/.test(qDigits)) {
+    const padded = String(Number(qDigits)).padStart(qDigits.length, '0')
+    return cDigits === qDigits || cDigits === padded
+  }
+  return true
+}
+
+async function resolveSetsByOfficial(official: number): Promise<string[]> {
+  try {
+    const res = await fetch('/scan/set-index.json')
+    if (res.ok) {
+      const idx = (await res.json()) as { byOfficial?: Record<string, string[]> }
+      const fromIndex = idx.byOfficial?.[String(official)]
+      if (fromIndex?.length) return fromIndex
+    }
+  } catch {
+    /* fall through */
+  }
+
+  try {
+    const sets = await getClient('en').set.list()
+    return sets
+      .filter((s) => {
+        const count = (s as { cardCount?: { official?: number; total?: number } }).cardCount
+        return count?.official === official || count?.total === official
+      })
+      .map((s) => s.id)
+  } catch {
+    return []
+  }
+}
+
+async function fetchCardBrief(
+  lang: CardLang,
+  setId: string,
+  localId: string,
+): Promise<CardBrief | null> {
+  const langs: CardLang[] = lang === 'en' ? ['en'] : [lang, 'en']
+  for (const lid of localIdVariants(localId)) {
+    for (const L of langs) {
+      try {
+        const card = await getClient(L).card.get(`${setId}-${lid}`)
+        if (!card?.id) continue
+        return {
+          id: card.id,
+          name: card.name,
+          localId: card.localId,
+          image: card.image,
+        }
+      } catch {
+        /* try next */
+      }
+    }
+  }
+  return null
+}
+
+async function listByName(lang: CardLang, name: string, page = 1, pageSize = 30): Promise<CardBrief[]> {
+  try {
+    const list = await getClient(lang).card.list(
+      Query.create().like('name', name).paginate(page, pageSize),
+    )
+    return list as CardBrief[]
+  } catch {
+    return []
+  }
+}
+
+async function listByLocalId(lang: CardLang, localId: string): Promise<CardBrief[]> {
+  const variants = localIdVariants(localId)
+  const byId = new Map<string, CardBrief>()
+  await Promise.all(
+    variants.map(async (lid) => {
+      try {
+        const list = (await getClient(lang).card.list(
+          Query.create().like('localId', lid).paginate(1, 100),
+        )) as CardBrief[]
+        for (const c of list) {
+          if (localIdMatches(c.localId, localId) && !byId.has(c.id)) byId.set(c.id, c)
+        }
+      } catch {
+        /* ignore */
+      }
+    }),
+  )
+  return [...byId.values()]
+}
+
+function setIdFromCardId(cardId: string): string {
+  const dash = cardId.lastIndexOf('-')
+  return dash > 0 ? cardId.slice(0, dash) : cardId
+}
+
+function withSetId(brief: CardBrief): CardBrief {
+  return { ...brief, setId: brief.setId ?? setIdFromCardId(brief.id) }
+}
+
+/** Prefer locale metadata; fall back to EN / original brief. */
+async function localizeBriefs(lang: CardLang, briefs: CardBrief[], limit = 40): Promise<CardBrief[]> {
+  const sliced = briefs.slice(0, limit)
+  if (lang === 'en') return sliced.map(withSetId)
+
+  const localized = await Promise.all(
+    sliced.map(async (b) => {
+      const setId = setIdFromCardId(b.id)
+      const localId = String(b.localId)
+      const hit = await fetchCardBrief(lang, setId, localId)
+      return withSetId(hit ?? b)
+    }),
+  )
+  return localized
+}
+
+function scoreBrief(c: CardBrief, numOnly: string | null, preferredSets: Set<string> | null): number {
+  let score = 0
+  if (preferredSets?.has(setIdFromCardId(c.id))) score += 100
+  if (numOnly) {
+    const lid = String(c.localId)
+    if (lid === numOnly) score += 20
+    else if (lid === String(Number(numOnly.replace(/\D/g, ''))).padStart(numOnly.replace(/\D/g, '').length, '0'))
+      score += 10
+  }
+  if (c.image) score += 2
+  return score
+}
+
+export async function searchCards(lang: CardLang, name: string, page = 1): Promise<CardBrief[]> {
   const q = name.trim()
   if (!q) return []
-  return getClient(lang).card.list(Query.create().like('name', q).paginate(page, 30))
+
+  const byId = new Map<string, CardBrief>()
+
+  function merge(list: CardBrief[]) {
+    for (const c of list) {
+      if (!byId.has(c.id)) byId.set(c.id, c)
+    }
+  }
+
+  const stripped = q.replace(/^#/, '').trim()
+  const frac = /^(\d+[a-zA-Z]?)\s*\/\s*(\d+)$/i.exec(stripped)
+  const localFromFrac = frac?.[1] ?? null
+  const setTotal = frac?.[2] ? Number(frac[2]) : null
+  const numOnly =
+    localFromFrac ?? (/^\d+[a-zA-Z]?$/i.test(stripped) ? stripped : null)
+  const cardIdMatch = /^([a-z0-9.]+)-(\d+[a-zA-Z]?)$/i.exec(stripped.replace(/\s+/g, ''))
+  const isNumberQuery = Boolean(numOnly || cardIdMatch)
+
+  const tasks: Promise<void>[] = []
+
+  // Name: locale catalog + EN discovery (JA has Japanese names; Latin names live in EN)
+  if (!isNumberQuery) {
+    tasks.push(listByName(lang, q, page, 30).then(merge))
+    if (lang !== 'en') {
+      tasks.push(listByName('en', q, page, 30).then(merge))
+    }
+  }
+
+  // "009/094" → sets with official/total 94, then fetch set-009
+  let preferredSets: Set<string> | null = null
+  if (numOnly && setTotal && Number.isFinite(setTotal)) {
+    tasks.push(
+      (async () => {
+        const setIds = await resolveSetsByOfficial(setTotal)
+        preferredSets = new Set(setIds)
+        const cards = await Promise.all(
+          setIds.slice(0, 16).map((setId) => fetchCardBrief(lang, setId, numOnly)),
+        )
+        merge(cards.filter((c): c is CardBrief => Boolean(c)))
+      })(),
+    )
+  }
+
+  // Number search (TCGdex equal('localId') returns []; use like + filter)
+  // Prefer EN catalog for coverage, also search active locale.
+  if (numOnly && !(setTotal && Number.isFinite(setTotal))) {
+    tasks.push(listByLocalId('en', numOnly).then(merge))
+    if (lang !== 'en') {
+      tasks.push(listByLocalId(lang, numOnly).then(merge))
+    }
+  } else if (numOnly && setTotal && Number.isFinite(setTotal)) {
+    // Still gather extras, but preferredSets filter applies later
+    tasks.push(listByLocalId('en', numOnly).then(merge))
+  }
+
+  // Full id: "sv3-25" / "me02-009"
+  if (cardIdMatch) {
+    const setId = cardIdMatch[1].toLowerCase()
+    const lid = cardIdMatch[2]
+    tasks.push(
+      fetchCardBrief(lang, setId, lid).then((card) => {
+        if (card) merge([card])
+      }),
+    )
+  }
+
+  await Promise.all(tasks)
+
+  let all = [...byId.values()]
+
+  if (numOnly && setTotal && Number.isFinite(setTotal)) {
+    if (!preferredSets) preferredSets = new Set(await resolveSetsByOfficial(setTotal))
+    const preferred = all.filter((c) => preferredSets!.has(setIdFromCardId(c.id)))
+    if (preferred.length > 0) all = preferred
+  }
+
+  all.sort(
+    (a, b) =>
+      scoreBrief(b, numOnly, preferredSets) - scoreBrief(a, numOnly, preferredSets),
+  )
+
+  return localizeBriefs(lang, all, 40)
 }
 
 export type CardSearchFilters = {
@@ -300,16 +534,55 @@ export async function searchCardsAdvanced(
 ): Promise<DeckSearchHit[]> {
   const page = filters.page ?? 1
   const pageSize = filters.pageSize ?? 48
-  let q = Query.create().paginate(page, pageSize)
-
   const name = filters.name?.trim()
-  if (name) q = q.like('name', name)
 
+  // Name path: reuse discovery EN + locale localization from searchCards
+  if (name) {
+    const discovered = await searchCards(lang, name, page)
+    let hits: DeckSearchHit[] = discovered.map((c) => ({
+      id: c.id,
+      name: c.name,
+      localId: c.localId,
+      image: c.image,
+      setId: c.setId ?? setIdFromCardId(c.id),
+    }))
+
+    // Category / type filters — apply via API on EN (stable), then keep matching ids
+    if (filters.category || filters.type) {
+      const filterLang: CardLang = lang === 'pt' ? 'pt' : 'en'
+      let q = Query.create().paginate(1, 100)
+      if (filters.category) {
+        const cat =
+          CATEGORY_BY_LANG[filterLang][filters.category] ?? filters.category
+        q = q.equal('category', cat)
+      }
+      if (filters.type) {
+        const typeName = TYPE_BY_LANG[filterLang][filters.type] ?? filters.type
+        q = q.contains('types', typeName)
+      }
+      // Narrow by name on the filter language too
+      q = q.like('name', name)
+      try {
+        const filtered = (await getClient(filterLang).card.list(q)) as CardBrief[]
+        const allowed = new Set(filtered.map((c) => c.id))
+        // Also allow EN-discovered ids that appear in filtered list when langs differ
+        if (allowed.size > 0) {
+          hits = hits.filter((h) => allowed.has(h.id))
+        }
+      } catch {
+        /* keep unfiltered name hits */
+      }
+    }
+
+    return hits.slice(0, pageSize)
+  }
+
+  // Category / type only (no name)
+  let q = Query.create().paginate(page, pageSize)
   if (filters.category) {
     const cat = CATEGORY_BY_LANG[lang][filters.category] ?? filters.category
     q = q.equal('category', cat)
   }
-
   if (filters.type) {
     const typeName = TYPE_BY_LANG[lang][filters.type] ?? filters.type
     q = q.contains('types', typeName)
@@ -317,26 +590,27 @@ export async function searchCardsAdvanced(
 
   try {
     const list = (await getClient(lang).card.list(q)) as CardBrief[]
-    return list.map((c) => ({
+    const briefs = list.map(withSetId)
+    const localized = await localizeBriefs(lang, briefs, pageSize)
+    return localized.map((c) => ({
       id: c.id,
       name: c.name,
       localId: c.localId,
       image: c.image,
+      setId: c.setId,
     }))
   } catch {
-    if (name) {
-      return (await searchCards(lang, name, page)) as DeckSearchHit[]
-    }
-    // Last resort: unfiltered page
     try {
-      const list = (await getClient(lang).card.list(
+      const list = (await getClient('en').card.list(
         Query.create().paginate(page, pageSize),
       )) as CardBrief[]
-      return list.map((c) => ({
+      const localized = await localizeBriefs(lang, list.map(withSetId), pageSize)
+      return localized.map((c) => ({
         id: c.id,
         name: c.name,
         localId: c.localId,
         image: c.image,
+        setId: c.setId,
       }))
     } catch {
       return []

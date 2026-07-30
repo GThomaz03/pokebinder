@@ -73,23 +73,6 @@
   margin-left: auto;
 }
 
-.lang-select select {
-  appearance: none;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--btn-radius);
-  padding: 0.4rem 2rem 0.4rem 0.75rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' stroke='%238b929c' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.65rem center;
-}
-
-.lang-select select:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
 .auth-controls {
   display: flex;
   align-items: center;
@@ -153,6 +136,24 @@
 .app-shell:has(.binder-view) .cloud-hint,
 .app-shell:has(.deck-builder) .cloud-hint {
   display: none;
+}
+
+@media (max-width: 900px) {
+  /* Binder fills viewport on desktop; on mobile let the page grow and scroll */
+  .app-shell:has(.binder-view) {
+    height: auto;
+    max-height: none;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .main:has(.binder-view) {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+    padding-bottom: 5rem;
+  }
 }
 
 @media (max-width: 640px) {
