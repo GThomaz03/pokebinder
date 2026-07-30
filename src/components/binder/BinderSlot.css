@@ -51,8 +51,7 @@
 }
 
 .b-slot:hover .hover-actions,
-.b-slot:focus-within .hover-actions,
-.b-slot.menu-open .hover-actions {
+.b-slot:focus-within .hover-actions {
   display: flex;
 }
 
@@ -76,9 +75,13 @@
   pointer-events: none;
 }
 
+.slot-remove-btn {
+  background: rgba(220, 38, 38, 0.95);
+  font-size: 1.05rem;
+}
+
 .b-slot:hover .slot-menu-btn,
-.b-slot:focus-within .slot-menu-btn,
-.b-slot.menu-open .slot-menu-btn {
+.b-slot:focus-within .slot-menu-btn {
   opacity: 1;
   pointer-events: auto;
 }
@@ -89,12 +92,8 @@
     pointer-events: auto;
   }
 
-  .b-slot.menu-open .hover-actions {
+  .b-slot:focus-within .hover-actions {
     display: flex;
-  }
-
-  .b-slot:not(.menu-open):not(:focus-within) .hover-actions {
-    display: none;
   }
 }
 
@@ -121,8 +120,24 @@
   color: #111;
 }
 
-.b-slot.is-pinned .b-slot-frame {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent);
+.b-slot.has-owner .b-slot-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  border: 4px solid var(--owner-color);
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.b-slot.is-pinned.has-owner .b-slot-frame::after {
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.hover-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .pin-badge {
@@ -263,6 +278,35 @@
   border-radius: 3px;
   background: rgba(220, 38, 38, 0.9);
   color: white;
+}
+
+.owner-name-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(220px, 70vw);
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.2;
+  color: #fff;
+  background: color-mix(in srgb, var(--owner-color) 82%, #0b1220);
+  border: 1px solid color-mix(in srgb, var(--owner-color) 55%, #fff);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner-name-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--owner-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 @media (max-width: 900px) {

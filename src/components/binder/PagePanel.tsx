@@ -12,6 +12,10 @@ type PagePanelProps = {
   selectMode?: boolean
   selected?: Set<string>
   searchHits?: Set<string>
+  currentUserId?: string
+  memberNames?: Record<string, string>
+  /** placedBy userId → color, or null to hide */
+  ownerColorFor?: (placedBy: string | undefined) => string | null
   onActivate: (ref: SlotRef) => void
   onSelect?: (ref: SlotRef) => void
   onRemove?: (ref: SlotRef) => void
@@ -41,6 +45,9 @@ export function PagePanel({
   selectMode,
   selected,
   searchHits,
+  currentUserId,
+  memberNames,
+  ownerColorFor,
   onActivate,
   onSelect,
   onRemove,
@@ -79,6 +86,18 @@ export function PagePanel({
               selectMode={selectMode}
               selected={selected?.has(id)}
               searchHit={searchHits?.has(id)}
+              currentUserId={currentUserId}
+              memberNames={memberNames}
+              ownerColor={
+                slot?.type === 'card'
+                  ? ownerColorFor?.(slot.placedBy) ?? null
+                  : null
+              }
+              ownerName={
+                slot?.type === 'card' && slot.placedBy && ownerColorFor?.(slot.placedBy)
+                  ? memberNames?.[slot.placedBy] ?? 'Treinador'
+                  : null
+              }
               onActivate={() => onActivate(ref)}
               onSelect={() => onSelect?.(ref)}
               onRemove={() => onRemove?.(ref)}

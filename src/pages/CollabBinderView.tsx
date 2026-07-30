@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
-import { BinderSettings } from '../components/binder/BinderSettings'
 import { BinderSpread } from '../components/binder/BinderSpread'
 import { CardDetailsModal } from '../components/binder/CardDetailsModal'
+import { CollabSettingsDrawer } from '../components/binder/CollabSettingsDrawer'
 import { ToolsSidebar } from '../components/binder/ToolsSidebar'
 import { CardImage } from '../components/CardImage'
 import { useAuth } from '../hooks/useAuth'
@@ -14,6 +14,12 @@ import { useTray } from '../hooks/useTray'
 import { getCachedCard, hydrateCard } from '../api/prices'
 import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { binderTotalBrl } from '../lib/binderUtils'
+import {
+  loadOwnerViz,
+  memberColor,
+  saveOwnerViz,
+  type OwnerVizState,
+} from '../lib/collabColors'
 import {
   disableInviteLink,
   enableInviteLink,
@@ -43,6 +49,7 @@ export function CollabBinderViewPage() {
     saving,
     conflictNotice,
     isOwner,
+    currentUserId,
     reload,
     refreshMembers,
     swapSlot,
@@ -52,8 +59,9 @@ export function CollabBinderViewPage() {
     clearSlot,
     takeSlot,
     setSlot,
-    addCardsToPage,
+    placeCards,
     togglePin,
+    markSlotMissing,
     reorderPages,
     updateSettings,
     setGrid,
@@ -73,13 +81,16 @@ export function CollabBinderViewPage() {
   const [search, setSearch] = useState('')
   const [detailsKey, setDetailsKey] = useState<string | null>(null)
   const [inspectRef, setInspectRef] = useState<SlotRef | null>(null)
-  const [membersOpen, setMembersOpen] = useState(false)
   const [inviteBusy, setInviteBusy] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
   const [friends, setFriends] = useState<Profile[]>([])
   const [priceTick, setPriceTick] = useState(0)
+  const [ownerViz, setOwnerViz] = useState<OwnerVizState>({
+    enabled: false,
+    visibleUserIds: [],
+  })
 
-  const overlayOpen = settingsOpen || addOpen || Boolean(detailsKey) || membersOpen
+  const overlayOpen = settingsOpen || addOpen || Boolean(detailsKey)
 
   const pages = binder?.pages ?? []
   const totalSpreads = Math.max(1, Math.ceil(pages.length / 2))
@@ -94,9 +105,14 @@ export function CollabBinderViewPage() {
   }, [spreadIndex, safeSpread])
 
   useEffect(() => {
-    if (!user || !membersOpen) return
+    if (!id || !members.length) return
+    setOwnerViz(loadOwnerViz(id, members.map((m) => m.userId)))
+  }, [id, members])
+
+  useEffect(() => {
+    if (!user || !settingsOpen) return
     void listFollowing(user.id).then(setFriends).catch(() => setFriends([]))
-  }, [user, membersOpen])
+  }, [user, settingsOpen])
 
   const canPrevPage = safeSpread > 0
   const canNextPage = safeSpread < totalSpreads - 1 || true
@@ -172,8 +188,8 @@ export function CollabBinderViewPage() {
     const keys: string[] = []
     for (const page of binder.pages) {
       for (const slot of page.slots) {
-        const id = slotDisplayCardId(slot)
-        if (id) keys.push(id)
+        const idKey = slotDisplayCardId(slot)
+        if (idKey) keys.push(idKey)
       }
     }
     void Promise.all(
@@ -196,6 +212,27 @@ export function CollabBinderViewPage() {
     const total = binderTotalBrl(binder)
     return total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   }, [binder, priceTick])
+
+  const memberNames = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const m of members) {
+      map[m.userId] = m.displayName || m.username || 'Treinador'
+    }
+    return map
+  }, [members])
+
+  const ownerColorFor = useMemo(() => {
+    return (placedBy: string | undefined): string | null => {
+      if (!ownerViz.enabled || !placedBy) return null
+      if (!ownerViz.visibleUserIds.includes(placedBy)) return null
+      return memberColor(placedBy)
+    }
+  }, [ownerViz])
+
+  function patchOwnerViz(next: OwnerVizState) {
+    setOwnerViz(next)
+    if (id) saveOwnerViz(id, next)
+  }
 
   const inspectSlot =
     inspectRef && binder
@@ -231,6 +268,7 @@ export function CollabBinderViewPage() {
 
   const showBatch = toolMode === 'select' && selected.size > 0
   const showTrayChrome = !overlayOpen
+  const memberIds = new Set(members.map((m) => m.userId))
 
   function jumpTo(ref: SlotRef) {
     setSpreadIndex(Math.floor(ref.pageIndex / 2))
@@ -263,19 +301,15 @@ export function CollabBinderViewPage() {
     const current = binder!.pages[to.pageIndex]?.slots[to.slotIndex] ?? null
     if (current && 'pinned' in current && current.pinned) return
     const item = tray.peekItem(trayItemId)
-    if (!item) return
-    if (current && current.type === 'card') {
+    if (!item || item.slot.type !== 'card') return
+    if (current === null) {
       tray.takeItem(trayItemId)
-      tray.addSlot(current, {
-        binderId: binder!.id,
-        pageIndex: to.pageIndex,
-        slotIndex: to.slotIndex,
-      })
-      setSlot(to, item.slot)
+      placeCards(to, [item.slot.cardId])
       return
     }
+    // Occupied (unpinned): overflow to next empty instead of overwrite
     tray.takeItem(trayItemId)
-    setSlot(to, item.slot)
+    placeCards(to, [item.slot.cardId])
   }
 
   async function toggleInviteLink() {
@@ -346,7 +380,163 @@ export function CollabBinderViewPage() {
     navigate('/')
   }
 
-  const memberIds = new Set(members.map((m) => m.userId))
+  const membersPanel = (
+    <>
+      <section>
+        <h3>Membros</h3>
+        <ul className="collab-member-list">
+          {members.map((m) => {
+            const color = memberColor(m.userId)
+            const visible = ownerViz.visibleUserIds.includes(m.userId)
+            return (
+              <li key={m.userId}>
+                <span className="collab-member-info">
+                  <i className="collab-member-swatch" style={{ background: color }} aria-hidden />
+                  <span>
+                    <strong>{m.displayName || m.username || 'Treinador'}</strong>
+                    <small>
+                      {m.role === 'owner' ? 'Dono' : 'Editor'}
+                      {m.username ? ` · @${m.username}` : ''}
+                    </small>
+                  </span>
+                </span>
+                <span className="collab-member-actions">
+                  {ownerViz.enabled && (
+                    <label className="collab-viz-check" title="Mostrar borda deste membro">
+                      <input
+                        type="checkbox"
+                        checked={visible}
+                        onChange={() => {
+                          const ids = visible
+                            ? ownerViz.visibleUserIds.filter((x) => x !== m.userId)
+                            : [...ownerViz.visibleUserIds, m.userId]
+                          patchOwnerViz({ ...ownerViz, visibleUserIds: ids })
+                        }}
+                      />
+                      Borda
+                    </label>
+                  )}
+                  {isOwner && m.role !== 'owner' && (
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => void onRemoveMember(m.userId)}
+                    >
+                      Remover
+                    </button>
+                  )}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+
+      <section>
+        <h3>Dono das cartas</h3>
+        <label className="collab-viz-toggle">
+          <span>Ver dono das cartas</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={ownerViz.enabled}
+            className={`switch ${ownerViz.enabled ? 'on' : ''}`}
+            onClick={() =>
+              patchOwnerViz({
+                ...ownerViz,
+                enabled: !ownerViz.enabled,
+                visibleUserIds:
+                  ownerViz.visibleUserIds.length > 0
+                    ? ownerViz.visibleUserIds
+                    : members.map((m) => m.userId),
+              })
+            }
+          >
+            <i />
+          </button>
+        </label>
+        <p className="muted collab-viz-hint">
+          Bordas coloridas mostram quem colocou cada carta. Use os checkboxes na lista para filtrar.
+        </p>
+      </section>
+
+      {isOwner && (
+        <>
+          <section>
+            <h3>Convidar amigo</h3>
+            {friends.filter((f) => !memberIds.has(f.id)).length === 0 ? (
+              <p className="muted">Siga alguém em Amigos para poder convidar.</p>
+            ) : (
+              <ul className="collab-member-list">
+                {friends
+                  .filter((f) => !memberIds.has(f.id))
+                  .map((f) => (
+                    <li key={f.id}>
+                      <span className="collab-member-info">
+                        <i
+                          className="collab-member-swatch"
+                          style={{ background: memberColor(f.id) }}
+                          aria-hidden
+                        />
+                        <span>{f.displayName || f.username}</span>
+                      </span>
+                      <button
+                        type="button"
+                        className="btn primary"
+                        disabled={inviteBusy}
+                        onClick={() => void onInviteFriend(f.id)}
+                      >
+                        Convidar
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <h3>Link de convite</h3>
+            <div className="collab-invite-actions">
+              {row.inviteToken ? (
+                <>
+                  <button type="button" className="btn accent" onClick={() => void copyInvite()}>
+                    {inviteCopied ? 'Copiado!' : 'Copiar link'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={inviteBusy}
+                    onClick={() => void toggleInviteLink()}
+                  >
+                    Desativar link
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={inviteBusy}
+                  onClick={() => void toggleInviteLink()}
+                >
+                  Ativar e copiar link
+                </button>
+              )}
+            </div>
+          </section>
+
+          <button type="button" className="btn ghost danger-text" onClick={() => void onDelete()}>
+            Apagar fichário
+          </button>
+        </>
+      )}
+
+      {!isOwner && (
+        <button type="button" className="btn ghost" onClick={() => void onLeave()}>
+          Sair do fichário
+        </button>
+      )}
+    </>
+  )
 
   return (
     <div
@@ -368,9 +558,6 @@ export function CollabBinderViewPage() {
               Total {totalValueLabel}
             </span>
           )}
-          <button type="button" className="btn-ghost" onClick={() => setMembersOpen(true)}>
-            Membros ({members.length})
-          </button>
           <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)}>
             Configurações
           </button>
@@ -434,12 +621,17 @@ export function CollabBinderViewPage() {
             selectMode={toolMode === 'select'}
             selected={selected}
             searchHits={toolMode === 'search' ? searchHits : undefined}
+            currentUserId={currentUserId}
+            memberNames={memberNames}
+            ownerColorFor={ownerColorFor}
             onSwap={swapSlot}
             onDropSlotToTray={sendToTray}
             onDropTrayToSlot={placeFromTray}
             onLabelChange={setPageLabel}
             onDeletePage={(pageIndex) => {
-              if (window.confirm('Limpar slots desta página?')) clearPage(pageIndex)
+              if (window.confirm('Limpar slots desta página? (cartas fixadas são mantidas)')) {
+                clearPage(pageIndex)
+              }
             }}
             onSelect={toggleSelect}
             onActivate={(ref) => {
@@ -454,6 +646,8 @@ export function CollabBinderViewPage() {
             onRemove={(ref) => clearSlot(ref)}
             onToTray={sendToTray}
             onReplace={(ref) => {
+              const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
+              if (slot && 'pinned' in slot && slot.pinned) return
               setInspectRef(ref)
               setReplaceRef(ref)
               setAddOpen(true)
@@ -465,7 +659,7 @@ export function CollabBinderViewPage() {
               setInspectRef(ref)
             }}
             onPin={(ref) => togglePin(ref)}
-            onMarkMissing={() => {}}
+            onMarkMissing={(ref) => markSlotMissing(ref)}
             onDetails={(ref) => {
               const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
               const key = slotDisplayCardId(slot ?? null)
@@ -498,7 +692,7 @@ export function CollabBinderViewPage() {
         </aside>
       </div>
 
-      <BinderSettings
+      <CollabSettingsDrawer
         open={settingsOpen}
         binder={binder}
         onClose={() => setSettingsOpen(false)}
@@ -517,6 +711,7 @@ export function CollabBinderViewPage() {
             return { owned: 0, total: 0, filled, slots }
           },
         }}
+        membersPanel={membersPanel}
       />
 
       <AddCardsModal
@@ -528,14 +723,26 @@ export function CollabBinderViewPage() {
         }}
         onAdd={(cardIds) => {
           if (replaceRef && cardIds[0]) {
-            setSlot(replaceRef, { type: 'card', cardId: cardIds[0] })
+            const cur = binder.pages[replaceRef.pageIndex]?.slots[replaceRef.slotIndex]
+            if (cur && 'pinned' in cur && cur.pinned) {
+              setReplaceRef(null)
+              setAddOpen(false)
+              return
+            }
+            setSlot(replaceRef, {
+              type: 'card',
+              cardId: cardIds[0],
+              ...(currentUserId ? { placedBy: currentUserId } : {}),
+            })
             ensureOwned(cardIds[0])
             setReplaceRef(null)
             setAddOpen(false)
             return
           }
-          const pageIndex = inspectRef?.pageIndex ?? leftIndex
-          addCardsToPage(pageIndex, cardIds)
+          const preferred =
+            inspectRef ??
+            ({ pageIndex: leftIndex, slotIndex: 0 } satisfies SlotRef)
+          placeCards(preferred, cardIds)
           ensureOwnedMany(cardIds)
           setAddOpen(false)
         }}
@@ -548,104 +755,6 @@ export function CollabBinderViewPage() {
           settings={binder.settings}
           onClose={() => setDetailsKey(null)}
         />
-      )}
-      {membersOpen && (
-        <div className="collab-members-backdrop" onClick={() => setMembersOpen(false)}>
-          <div
-            className="collab-members"
-            role="dialog"
-            aria-label="Membros"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>Membros</h2>
-            <ul className="collab-member-list">
-              {members.map((m) => (
-                <li key={m.userId}>
-                  <span>
-                    <strong>{m.displayName || m.username || 'Treinador'}</strong>
-                    <small>
-                      {m.role === 'owner' ? 'Dono' : 'Editor'}
-                      {m.username ? ` · @${m.username}` : ''}
-                    </small>
-                  </span>
-                  {isOwner && m.role !== 'owner' && (
-                    <button type="button" className="btn ghost" onClick={() => void onRemoveMember(m.userId)}>
-                      Remover
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-
-            {isOwner && (
-              <>
-                <h3>Convidar amigo</h3>
-                {friends.filter((f) => !memberIds.has(f.id)).length === 0 ? (
-                  <p className="muted">Siga alguém em Amigos para poder convidar.</p>
-                ) : (
-                  <ul className="collab-member-list">
-                    {friends
-                      .filter((f) => !memberIds.has(f.id))
-                      .map((f) => (
-                        <li key={f.id}>
-                          <span>{f.displayName || f.username}</span>
-                          <button
-                            type="button"
-                            className="btn primary"
-                            disabled={inviteBusy}
-                            onClick={() => void onInviteFriend(f.id)}
-                          >
-                            Convidar
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                )}
-
-                <h3>Link de convite</h3>
-                <div className="collab-invite-actions">
-                  {row.inviteToken ? (
-                    <>
-                      <button type="button" className="btn accent" onClick={() => void copyInvite()}>
-                        {inviteCopied ? 'Copiado!' : 'Copiar link'}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn ghost"
-                        disabled={inviteBusy}
-                        onClick={() => void toggleInviteLink()}
-                      >
-                        Desativar link
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn primary"
-                      disabled={inviteBusy}
-                      onClick={() => void toggleInviteLink()}
-                    >
-                      Ativar e copiar link
-                    </button>
-                  )}
-                </div>
-                <button type="button" className="btn ghost danger-text" onClick={() => void onDelete()}>
-                  Apagar fichário
-                </button>
-              </>
-            )}
-
-            {!isOwner && (
-              <button type="button" className="btn ghost" onClick={() => void onLeave()}>
-                Sair do fichário
-              </button>
-            )}
-
-            <button type="button" className="btn ghost" onClick={() => setMembersOpen(false)}>
-              Fechar
-            </button>
-          </div>
-        </div>
       )}
     </div>
   )

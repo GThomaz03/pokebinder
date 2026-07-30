@@ -56,6 +56,9 @@ type Props = {
   pageLabel: string
   onPrevPage: () => void
   onNextPage: () => void
+  currentUserId?: string
+  memberNames?: Record<string, string>
+  ownerColorFor?: (placedBy: string | undefined) => string | null
 }
 
 const SWIPE_MIN_DX = 56
@@ -90,6 +93,9 @@ export function BinderSpread({
   pageLabel,
   onPrevPage,
   onNextPage,
+  currentUserId,
+  memberNames,
+  ownerColorFor,
 }: Props) {
   const { peekItem } = useTray()
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -286,6 +292,9 @@ export function BinderSpread({
     selectMode,
     selected,
     searchHits,
+    currentUserId,
+    memberNames,
+    ownerColorFor,
     onActivate,
     onSelect,
     onRemove,

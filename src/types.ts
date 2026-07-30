@@ -12,6 +12,12 @@ export type CardSlot = {
   type: 'card'
   cardId: string
   pinned?: boolean
+  /** Collab: user who pinned — only they can unpin */
+  pinnedBy?: string
+  /** Collab: user who placed the card (ownership border) */
+  placedBy?: string
+  /** Custom/collab: dim like wishlist “missing from inventory” */
+  missing?: boolean
 }
 
 /** Used by both collection Pokédex and wishlist Pokédex binders */

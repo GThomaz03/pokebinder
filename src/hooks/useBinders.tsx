@@ -417,7 +417,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
               topCardId: undefined,
             }
           } else if (s?.type === 'card') {
-            slots[ref.slotIndex] = null
+            slots[ref.slotIndex] = { ...s, missing: !s.missing }
           }
           return { ...p, slots }
         })

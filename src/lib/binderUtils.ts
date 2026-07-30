@@ -180,6 +180,86 @@ export function findEmptySlotsOnPage(
   return indexes
 }
 
+/** Next empty slot starting at `from` (inclusive), scanning forward then wrapping. */
+export function findNextEmptySlot(
+  pages: BinderPage[],
+  from: { pageIndex: number; slotIndex: number },
+): { pageIndex: number; slotIndex: number } | null {
+  if (!pages.length) return null
+  const startPi = Math.max(0, Math.min(from.pageIndex, pages.length - 1))
+  const startSi = Math.max(0, from.slotIndex)
+
+  for (let pi = startPi; pi < pages.length; pi++) {
+    const page = pages[pi]
+    const fromSi = pi === startPi ? startSi : 0
+    for (let si = fromSi; si < page.slots.length; si++) {
+      if (page.slots[si] === null) return { pageIndex: pi, slotIndex: si }
+    }
+  }
+  for (let pi = 0; pi <= startPi; pi++) {
+    const page = pages[pi]
+    const toSi = pi === startPi ? startSi : page.slots.length
+    for (let si = 0; si < toSi; si++) {
+      if (page.slots[si] === null) return { pageIndex: pi, slotIndex: si }
+    }
+  }
+  return null
+}
+
+export function isSlotPinned(slot: Slot): boolean {
+  return Boolean(slot && 'pinned' in slot && slot.pinned)
+}
+
+/** Collab: anyone can mutate empty/unpinned; pinned only blocked for move/clear. */
+export function canClearOrMoveSlot(slot: Slot): boolean {
+  return !isSlotPinned(slot)
+}
+
+export function canUnpinSlot(slot: Slot, userId: string | undefined): boolean {
+  if (!slot || slot.type !== 'card' || !slot.pinned || !userId) return false
+  return slot.pinnedBy === userId
+}
+
+/**
+ * Place cards with overflow: if preferred slot is taken, use next empty.
+ * Stamps placedBy on each card.
+ */
+export function placeCardsWithOverflow(
+  pages: BinderPage[],
+  preferred: { pageIndex: number; slotIndex: number },
+  cardIds: string[],
+  placedBy: string,
+): { pages: BinderPage[]; placed: number; refs: { pageIndex: number; slotIndex: number }[] } {
+  const next = pages.map((p) => ({ ...p, slots: [...p.slots] as Slot[] }))
+  const refs: { pageIndex: number; slotIndex: number }[] = []
+  let searchFrom = { ...preferred }
+
+  for (const cardId of cardIds) {
+    const occupant = next[searchFrom.pageIndex]?.slots[searchFrom.slotIndex] ?? undefined
+    let dest: { pageIndex: number; slotIndex: number } | null =
+      occupant === null ? searchFrom : null
+
+    if (!dest) {
+      dest =
+        findNextEmptySlot(next, {
+          pageIndex: searchFrom.pageIndex,
+          slotIndex: searchFrom.slotIndex + 1,
+        }) ?? findNextEmptySlot(next, { pageIndex: 0, slotIndex: 0 })
+    }
+    if (!dest) break
+
+    next[dest.pageIndex].slots[dest.slotIndex] = {
+      type: 'card',
+      cardId,
+      placedBy,
+    }
+    refs.push(dest)
+    searchFrom = { pageIndex: dest.pageIndex, slotIndex: dest.slotIndex + 1 }
+  }
+
+  return { pages: next, placed: refs.length, refs }
+}
+
 export function pokedexProgress(binder: Binder): { owned: number; total: number } {
   let owned = 0
   let total = 0

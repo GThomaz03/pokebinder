@@ -18,37 +18,46 @@
   color: var(--text);
 }
 
-.collab-members-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  background: rgba(0, 0, 0, 0.55);
+.collab-settings-head {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.collab-settings-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.collab-settings-tabs button {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--btn-radius, 6px);
+  cursor: pointer;
+}
+
+.collab-settings-tabs button.active {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.collab-members-panel {
   display: grid;
-  place-items: center;
-  padding: 1rem;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
 }
 
-.collab-members {
-  width: min(440px, 100%);
-  max-height: min(85vh, 640px);
-  overflow: auto;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-page);
-  padding: 1.15rem;
-  display: grid;
-  gap: 0.75rem;
-  box-shadow: var(--shadow);
-}
-
-.collab-members h2,
-.collab-members h3 {
-  margin: 0;
-}
-
-.collab-members h3 {
+.collab-members-panel h3 {
+  margin: 0 0 0.5rem;
   font-size: 0.92rem;
-  margin-top: 0.35rem;
 }
 
 .collab-member-list {
@@ -70,6 +79,21 @@
   border-radius: var(--btn-radius);
 }
 
+.collab-member-info {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.collab-member-swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
 .collab-member-list strong {
   display: block;
 }
@@ -77,6 +101,37 @@
 .collab-member-list small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.collab-member-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.collab-viz-check {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.collab-viz-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.collab-viz-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
 }
 
 .collab-invite-actions {
@@ -138,4 +193,40 @@
   margin: 0;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.collab-viz-toggle .switch {
+  position: relative;
+  width: 2.4rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0;
+  cursor: pointer;
+}
+
+.collab-viz-toggle .switch i {
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.collab-viz-toggle .switch.on {
+  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.collab-viz-toggle .switch.on i {
+  transform: translateX(1rem);
+  background: var(--accent);
+}
+
+.settings-embedded {
+  display: contents;
 }

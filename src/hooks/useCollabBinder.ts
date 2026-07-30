@@ -7,8 +7,10 @@ import type {
   SlotRef,
 } from '../types'
 import {
+  canClearOrMoveSlot,
   createEmptyPage,
-  findEmptySlotsOnPage,
+  isSlotPinned,
+  placeCardsWithOverflow,
   rebuildPagesForGrid,
   swapSlots,
   uid,
@@ -34,6 +36,22 @@ type CollabState = {
   dirty: boolean
 }
 
+type PendingPlace = {
+  cardIds: string[]
+  preferred: SlotRef
+  placedBy: string
+}
+
+function collectCardKeys(pages: Binder['pages']): Set<string> {
+  const keys = new Set<string>()
+  for (const page of pages) {
+    for (const slot of page.slots) {
+      if (slot?.type === 'card') keys.add(`${slot.cardId}@${slot.placedBy ?? ''}`)
+    }
+  }
+  return keys
+}
+
 export function useCollabBinder(binderId: string) {
   const { user } = useAuth()
   const [state, setState] = useState<CollabState | null>(null)
@@ -47,6 +65,7 @@ export function useCollabBinder(binderId: string) {
   stateRef.current = state
   const applyingRemote = useRef(false)
   const skipNextSave = useRef(false)
+  const pendingPlaceRef = useRef<PendingPlace | null>(null)
 
   const refreshMembers = useCallback(async () => {
     if (!binderId) return
@@ -99,7 +118,6 @@ export function useCollabBinder(binderId: string) {
     return subscribeSharedBinder(binderId, (row) => {
       const local = stateRef.current
       if (local && row.revision <= local.row.revision) return
-      // Don't clobber unsaved local edits with equal-or-stale remote
       if (local?.dirty && row.revision <= local.row.revision) return
       applyingRemote.current = true
       skipNextSave.current = true
@@ -109,6 +127,29 @@ export function useCollabBinder(binderId: string) {
       }, 50)
     })
   }, [binderId, applyRow])
+
+  const reapplyPendingAfterConflict = useCallback(
+    (freshBinder: Binder): Binder => {
+      const pending = pendingPlaceRef.current
+      pendingPlaceRef.current = null
+      if (!pending?.cardIds.length) return freshBinder
+
+      const remoteKeys = collectCardKeys(freshBinder.pages)
+      const missing = pending.cardIds.filter(
+        (id) => !remoteKeys.has(`${id}@${pending.placedBy}`),
+      )
+      if (!missing.length) return freshBinder
+
+      const { pages } = placeCardsWithOverflow(
+        freshBinder.pages,
+        pending.preferred,
+        missing,
+        pending.placedBy,
+      )
+      return { ...freshBinder, pages, updatedAt: Date.now() }
+    },
+    [],
+  )
 
   useDebouncedEffect(
     () => {
@@ -125,6 +166,7 @@ export function useCollabBinder(binderId: string) {
         grid: cur.binder.grid,
       })
         .then((row) => {
+          pendingPlaceRef.current = null
           applyingRemote.current = true
           applyRow(row, false)
           window.setTimeout(() => {
@@ -137,9 +179,20 @@ export function useCollabBinder(binderId: string) {
             try {
               const fresh = await fetchSharedBinder(binderId)
               if (fresh) {
+                const base = sharedRowToBinder(fresh)
+                const merged = reapplyPendingAfterConflict(base)
                 applyingRemote.current = true
-                skipNextSave.current = true
-                applyRow(fresh, false)
+                if (merged !== base) {
+                  setState({
+                    row: fresh,
+                    binder: merged,
+                    dirty: true,
+                  })
+                  skipNextSave.current = false
+                } else {
+                  skipNextSave.current = true
+                  applyRow(fresh, false)
+                }
                 window.setTimeout(() => {
                   applyingRemote.current = false
                 }, 50)
@@ -172,10 +225,16 @@ export function useCollabBinder(binderId: string) {
   const binder = state?.binder ?? null
   const row = state?.row ?? null
   const isOwner = Boolean(user && row && user.id === row.ownerId)
+  const currentUserId = user?.id
 
   const swapSlot = useCallback(
     (from: SlotRef, to: SlotRef) => {
-      mutate((b) => ({ ...b, pages: swapSlots(b.pages, from, to) }))
+      mutate((b) => {
+        const a = b.pages[from.pageIndex]?.slots[from.slotIndex] ?? null
+        const c = b.pages[to.pageIndex]?.slots[to.slotIndex] ?? null
+        if (!canClearOrMoveSlot(a) || !canClearOrMoveSlot(c)) return b
+        return { ...b, pages: swapSlots(b.pages, from, to) }
+      })
     },
     [mutate],
   )
@@ -196,7 +255,10 @@ export function useCollabBinder(binderId: string) {
         ...b,
         pages: b.pages.map((p, i) =>
           i === pageIndex
-            ? { ...p, slots: p.slots.map(() => null) }
+            ? {
+                ...p,
+                slots: p.slots.map((s) => (isSlotPinned(s) ? s : null)),
+              }
             : p,
         ),
       }))
@@ -219,6 +281,8 @@ export function useCollabBinder(binderId: string) {
     (ref: SlotRef): Slot | null => {
       let taken: Slot | null = null
       mutate((b) => {
+        const cur = b.pages[ref.pageIndex]?.slots[ref.slotIndex] ?? null
+        if (!canClearOrMoveSlot(cur)) return b
         const pages = b.pages.map((p, pi) => {
           if (pi !== ref.pageIndex) return p
           const slots = [...p.slots]
@@ -240,40 +304,91 @@ export function useCollabBinder(binderId: string) {
 
   const setSlot = useCallback(
     (ref: SlotRef, slot: Slot) => {
+      mutate((b) => {
+        const cur = b.pages[ref.pageIndex]?.slots[ref.slotIndex] ?? null
+        if (isSlotPinned(cur)) return b
+        const stamped: Slot =
+          slot && slot.type === 'card' && currentUserId
+            ? { ...slot, placedBy: slot.placedBy ?? currentUserId }
+            : slot
+        return {
+          ...b,
+          pages: b.pages.map((p, pi) => {
+            if (pi !== ref.pageIndex) return p
+            const slots = [...p.slots]
+            slots[ref.slotIndex] = stamped
+            return { ...p, slots }
+          }),
+        }
+      })
+    },
+    [mutate, currentUserId],
+  )
+
+  const placeCards = useCallback(
+    (preferred: SlotRef, cardIds: string[]): number => {
+      if (!currentUserId || !cardIds.length) return 0
+      let placed = 0
+      pendingPlaceRef.current = {
+        cardIds: [...cardIds],
+        preferred: { ...preferred },
+        placedBy: currentUserId,
+      }
+      mutate((b) => {
+        const result = placeCardsWithOverflow(
+          b.pages,
+          preferred,
+          cardIds,
+          currentUserId,
+        )
+        placed = result.placed
+        return { ...b, pages: result.pages }
+      })
+      return placed
+    },
+    [mutate, currentUserId],
+  )
+
+  const addCardsToPage = useCallback(
+    (pageIndex: number, cardIds: string[]): number => {
+      return placeCards({ pageIndex, slotIndex: 0 }, cardIds)
+    },
+    [placeCards],
+  )
+
+  const togglePin = useCallback(
+    (ref: SlotRef) => {
+      if (!currentUserId) return
       mutate((b) => ({
         ...b,
         pages: b.pages.map((p, pi) => {
           if (pi !== ref.pageIndex) return p
           const slots = [...p.slots]
-          slots[ref.slotIndex] = slot
+          const s = slots[ref.slotIndex]
+          if (!s || s.type !== 'card') return p
+          if (s.pinned) {
+            if (s.pinnedBy && s.pinnedBy !== currentUserId) return p
+            slots[ref.slotIndex] = {
+              type: 'card',
+              cardId: s.cardId,
+              ...(s.placedBy ? { placedBy: s.placedBy } : {}),
+              ...(s.missing ? { missing: true } : {}),
+            }
+            return { ...p, slots }
+          }
+          slots[ref.slotIndex] = {
+            ...s,
+            pinned: true,
+            pinnedBy: currentUserId,
+          }
           return { ...p, slots }
         }),
       }))
     },
-    [mutate],
+    [mutate, currentUserId],
   )
 
-  const addCardsToPage = useCallback(
-    (pageIndex: number, cardIds: string[]): number => {
-      let placed = 0
-      mutate((b) => {
-        const pages = b.pages.map((p) => ({ ...p, slots: [...p.slots] }))
-        const page = pages[pageIndex]
-        if (!page) return b
-        const empties = findEmptySlotsOnPage(page, cardIds.length)
-        for (let i = 0; i < empties.length; i++) {
-          const slotIndex = empties[i]
-          pages[pageIndex].slots[slotIndex] = { type: 'card', cardId: cardIds[i] }
-          placed++
-        }
-        return { ...b, pages }
-      })
-      return placed
-    },
-    [mutate],
-  )
-
-  const togglePin = useCallback(
+  const markSlotMissing = useCallback(
     (ref: SlotRef) => {
       mutate((b) => ({
         ...b,
@@ -282,7 +397,7 @@ export function useCollabBinder(binderId: string) {
           const slots = [...p.slots]
           const s = slots[ref.slotIndex]
           if (!s || s.type !== 'card') return p
-          slots[ref.slotIndex] = { ...s, pinned: !s.pinned }
+          slots[ref.slotIndex] = { ...s, missing: !s.missing }
           return { ...p, slots }
         }),
       }))
@@ -336,6 +451,7 @@ export function useCollabBinder(binderId: string) {
     saving,
     conflictNotice,
     isOwner,
+    currentUserId,
     reload,
     refreshMembers,
     swapSlot,
@@ -345,8 +461,10 @@ export function useCollabBinder(binderId: string) {
     clearSlot,
     takeSlot,
     setSlot,
+    placeCards,
     addCardsToPage,
     togglePin,
+    markSlotMissing,
     reorderPages,
     updateSettings,
     setGrid,

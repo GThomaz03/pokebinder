@@ -18,9 +18,11 @@ type Props = {
   onClose: () => void
   /** Collab / external source — bypass useBinders mutations */
   adapters?: SettingsAdapters
+  /** Render only sections (parent provides drawer chrome) */
+  embedded?: boolean
 }
 
-export function BinderSettings({ binder, open, onClose, adapters }: Props) {
+export function BinderSettings({ binder, open, onClose, adapters, embedded }: Props) {
   const api = useBinders()
   const updateSettings = adapters?.updateSettings
     ?? ((patch: Partial<BinderSettingsType>) => api.updateSettings(binder.id, patch))
@@ -39,13 +41,13 @@ export function BinderSettings({ binder, open, onClose, adapters }: Props) {
   }, [open, binder.name])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || embedded) return
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, embedded])
 
   if (!open) return null
 
@@ -59,22 +61,8 @@ export function BinderSettings({ binder, open, onClose, adapters }: Props) {
     if (next && next !== binder.name) renameBinder(next)
   }
 
-  return (
-    <div className="settings-backdrop" role="presentation" onClick={onClose}>
-      <aside
-        className="settings-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Configurações do fichário"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="settings-head">
-          <h2>Configurações</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Fechar">
-            ×
-          </button>
-        </header>
-
+  const body = (
+    <>
         <section>
           <h3>Nome</h3>
           <label className="field">
@@ -207,6 +195,27 @@ export function BinderSettings({ binder, open, onClose, adapters }: Props) {
             </div>
           )}
         </section>
+    </>
+  )
+
+  if (embedded) return <div className="settings-embedded">{body}</div>
+
+  return (
+    <div className="settings-backdrop" role="presentation" onClick={onClose}>
+      <aside
+        className="settings-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Configurações do fichário"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="settings-head">
+          <h2>Configurações</h2>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Fechar">
+            ×
+          </button>
+        </header>
+        {body}
       </aside>
     </div>
   )

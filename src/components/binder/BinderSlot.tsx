@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { formatPrice, getCachedCard, getCachedPrice, hydrateCard } from '../../api/prices'
 import { baseCardId, parseOwnedKey } from '../../api/tcgdex'
@@ -7,7 +8,18 @@ import { CardImage } from '../CardImage'
 import { useInventory } from '../../hooks/useInventory'
 import { useLanguage } from '../../hooks/useLanguage'
 import { getPokedexName } from '../../lib/binderUtils'
-import type { Binder, BinderSettings, Slot, SlotRef } from '../../types'
+import {
+  ownerTipPlacement,
+  type OwnerTipPlacement,
+} from '../../lib/collabColors'
+import {
+  gridCols,
+  gridRows,
+  type Binder,
+  type BinderSettings,
+  type Slot,
+  type SlotRef,
+} from '../../types'
 import './BinderSlot.css'
 
 type Props = {
@@ -18,6 +30,14 @@ type Props = {
   selected?: boolean
   selectMode?: boolean
   searchHit?: boolean
+  /** Collab: current user — pin unlock only for pinnedBy */
+  currentUserId?: string
+  /** Collab: member display names for pin tooltip */
+  memberNames?: Record<string, string>
+  /** Collab: show ownership border color */
+  ownerColor?: string | null
+  /** Collab: owner display name when “ver dono” is on for this placedBy */
+  ownerName?: string | null
   onActivate: () => void
   onSelect?: () => void
   onRemove?: () => void
@@ -29,6 +49,32 @@ type Props = {
   onDetails?: () => void
 }
 
+type TipBox = {
+  placement: OwnerTipPlacement
+  top: number
+  left: number
+}
+
+function tipStyle(box: TipBox, color: string): CSSProperties {
+  const base: CSSProperties = {
+    position: 'fixed',
+    top: box.top,
+    left: box.left,
+    zIndex: 80,
+    ['--owner-color' as string]: color,
+  }
+  switch (box.placement) {
+    case 'side-left':
+      return { ...base, transform: 'translate(-100%, -50%)' }
+    case 'side-right':
+      return { ...base, transform: 'translate(0, -50%)' }
+    case 'bottom-center':
+      return { ...base, transform: 'translate(-50%, 0)' }
+    case 'top-center':
+      return { ...base, transform: 'translate(-50%, -100%)' }
+  }
+}
+
 export function BinderSlot({
   slotRef,
   slot,
@@ -37,6 +83,10 @@ export function BinderSlot({
   selected,
   selectMode,
   searchHit,
+  currentUserId,
+  memberNames,
+  ownerColor,
+  ownerName,
   onActivate,
   onSelect,
   onRemove,
@@ -50,10 +100,21 @@ export function BinderSlot({
   const { lang } = useLanguage()
   const { hasCard } = useInventory()
   const [tick, setTick] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [tipBox, setTipBox] = useState<TipBox | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const suppressClickRef = useRef(false)
   const pinned = Boolean(slot && 'pinned' in slot && slot.pinned)
+  const pinnedBy =
+    slot?.type === 'card' && slot.pinnedBy ? slot.pinnedBy : undefined
+  const canUnpin = Boolean(pinned && (!pinnedBy || pinnedBy === currentUserId))
+  const pinLocked = Boolean(pinned && pinnedBy && currentUserId && pinnedBy !== currentUserId)
+  const pinnedByLabel =
+    pinnedBy && memberNames?.[pinnedBy]
+      ? memberNames[pinnedBy]
+      : pinnedBy
+        ? 'outro membro'
+        : null
   const canDrag = slot !== null && !selectMode && !pinned && binder.kind === 'custom'
 
   const dragData: SlotDragData = {
@@ -87,6 +148,68 @@ export function BinderSlot({
         : undefined
   const cardId = rawId ? baseCardId(rawId) : undefined
 
+  const showOwnerTip = Boolean(hovered && ownerName && ownerColor && !isDragging)
+
+  function measureTip() {
+    const el = rootRef.current
+    if (!el || !ownerName || !ownerColor) {
+      setTipBox(null)
+      return
+    }
+    const rect = el.getBoundingClientRect()
+    const cols = gridCols(binder.grid)
+    const rows = gridRows(binder.grid)
+    const placement = ownerTipPlacement(slotRef.slotIndex, cols, rows)
+    const gap = 6
+    switch (placement) {
+      case 'side-left':
+        setTipBox({
+          placement,
+          top: rect.top + rect.height / 2,
+          left: rect.left - gap,
+        })
+        break
+      case 'side-right':
+        setTipBox({
+          placement,
+          top: rect.top + rect.height / 2,
+          left: rect.right + gap,
+        })
+        break
+      case 'bottom-center':
+        setTipBox({
+          placement,
+          top: rect.bottom + gap,
+          left: rect.left + rect.width / 2,
+        })
+        break
+      case 'top-center':
+        setTipBox({
+          placement,
+          top: rect.top - gap,
+          left: rect.left + rect.width / 2,
+        })
+        break
+    }
+  }
+
+  useEffect(() => {
+    if (!showOwnerTip) {
+      setTipBox(null)
+      return
+    }
+    measureTip()
+    function onMove() {
+      measureTip()
+    }
+    window.addEventListener('scroll', onMove, true)
+    window.addEventListener('resize', onMove)
+    return () => {
+      window.removeEventListener('scroll', onMove, true)
+      window.removeEventListener('resize', onMove)
+    }
+  }, [showOwnerTip, ownerName, ownerColor, slotRef.slotIndex, binder.grid])
+
   useEffect(() => {
     if (!rawId) return
     let cancelled = false
@@ -100,24 +223,6 @@ export function BinderSlot({
   }, [rawId, lang, cardId])
 
   useEffect(() => {
-    if (!menuOpen) return
-    function onDocPointer(e: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setMenuOpen(false)
-    }
-    document.addEventListener('pointerdown', onDocPointer)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDocPointer)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [menuOpen])
-
-  useEffect(() => {
     if (isDragging) suppressClickRef.current = true
   }, [isDragging])
 
@@ -128,6 +233,7 @@ export function BinderSlot({
   const price = settings.showPrices ? formatPrice(priceObj, settings.priceMarket) : null
   const isMissingPokedex =
     slot?.type === 'pokedex' && !slot.topCardId && slot.ownedCardIds.length === 0
+  const cardMarkedMissing = slot?.type === 'card' && Boolean(slot.missing)
 
   const wishlistDim =
     binder.kind === 'wishlist' &&
@@ -137,6 +243,7 @@ export function BinderSlot({
 
   const dim =
     wishlistDim ||
+    cardMarkedMissing ||
     (settings.dimMissing && isMissingPokedex) ||
     (settings.dimMissing && slot === null)
 
@@ -156,21 +263,28 @@ export function BinderSlot({
 
   function run(action?: () => void) {
     action?.()
-    setMenuOpen(false)
   }
+
+  const ownerStyle =
+    ownerColor != null
+      ? ({ '--owner-color': ownerColor } as CSSProperties)
+      : undefined
 
   return (
     <div
       ref={bindRef}
       className={`b-slot ${isOver ? 'is-over' : ''} ${dim ? 'is-dim' : ''} ${
-        isMissingPokedex ? 'is-missing' : ''
+        isMissingPokedex || cardMarkedMissing ? 'is-missing' : ''
       } ${selected ? 'is-selected' : ''} ${searchHit ? 'is-hit' : ''} ${
         pinned ? 'is-pinned' : ''
-      } ${menuOpen ? 'menu-open' : ''} ${isDragging ? 'is-dragging' : ''} ${
-        canDrag ? 'is-draggable' : ''
-      }`}
+      } ${ownerColor ? 'has-owner' : ''} ${
+        isDragging ? 'is-dragging' : ''
+      } ${canDrag ? 'is-draggable' : ''}`}
+      style={ownerStyle}
       {...(canDrag ? listeners : {})}
       {...(canDrag ? attributes : {})}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
       onClick={() => {
         if (suppressClickRef.current) {
           suppressClickRef.current = false
@@ -222,6 +336,8 @@ export function BinderSlot({
           <span className="owned-count">{slot.ownedCardIds.length}</span>
         )}
 
+        {cardMarkedMissing && <span className="missing-badge">Falta</span>}
+
         {isMissingPokedex && !settings.missingAsCardBack && (
           <span className="missing-badge">Falta</span>
         )}
@@ -229,19 +345,21 @@ export function BinderSlot({
 
       {hasContent && !selectMode && (
         <>
-          <button
-            type="button"
-            className="slot-menu-btn"
-            aria-label="Ações da carta"
-            aria-expanded={menuOpen}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              setMenuOpen((v) => !v)
-            }}
-          >
-            ⋯
-          </button>
+          {onRemove && !pinned && (
+            <button
+              type="button"
+              className="slot-menu-btn slot-remove-btn"
+              title="Remover"
+              aria-label="Remover"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove()
+              }}
+            >
+              ×
+            </button>
+          )}
           <div
             className="hover-actions"
             role="menu"
@@ -253,7 +371,7 @@ export function BinderSlot({
                 i
               </button>
             )}
-            {onReplace && (
+            {onReplace && !pinned && (
               <button
                 type="button"
                 title="Trocar carta"
@@ -271,15 +389,31 @@ export function BinderSlot({
             {onPin && (
               <button
                 type="button"
-                title={pinned ? 'Desafixar' : 'Fixar'}
-                aria-label={pinned ? 'Desafixar' : 'Fixar'}
+                title={
+                  pinLocked
+                    ? `Fixada por ${pinnedByLabel ?? 'outro membro'}`
+                    : pinned
+                      ? 'Desafixar'
+                      : 'Fixar'
+                }
+                aria-label={
+                  pinLocked
+                    ? `Fixada por ${pinnedByLabel ?? 'outro membro'}`
+                    : pinned
+                      ? 'Desafixar'
+                      : 'Fixar'
+                }
                 className={pinned ? 'active' : ''}
-                onClick={() => run(onPin)}
+                disabled={pinLocked || (pinned && currentUserId != null && !canUnpin)}
+                onClick={() => {
+                  if (pinLocked || (pinned && currentUserId != null && !canUnpin)) return
+                  run(onPin)
+                }}
               >
                 📌
               </button>
             )}
-            {onToTray && binder.kind === 'custom' && (
+            {onToTray && binder.kind === 'custom' && !pinned && (
               <button
                 type="button"
                 title="Enviar à bandeja"
@@ -289,7 +423,18 @@ export function BinderSlot({
                 ⧉
               </button>
             )}
-            {onMarkMissing && (
+            {onMarkMissing && slot?.type === 'card' && (
+              <button
+                type="button"
+                title={cardMarkedMissing ? 'Desmarcar faltante' : 'Marcar faltante'}
+                aria-label={cardMarkedMissing ? 'Desmarcar faltante' : 'Marcar faltante'}
+                className={cardMarkedMissing ? 'active' : ''}
+                onClick={() => run(onMarkMissing)}
+              >
+                –
+              </button>
+            )}
+            {onMarkMissing && slot?.type === 'pokedex' && (
               <button
                 type="button"
                 title="Marcar faltante"
@@ -299,20 +444,25 @@ export function BinderSlot({
                 –
               </button>
             )}
-            {onRemove && (
-              <button
-                type="button"
-                title="Remover"
-                aria-label="Remover"
-                className="danger"
-                onClick={() => run(onRemove)}
-              >
-                ×
-              </button>
-            )}
           </div>
         </>
       )}
+
+      {showOwnerTip &&
+        tipBox &&
+        ownerName &&
+        ownerColor &&
+        createPortal(
+          <div
+            className={`owner-name-tip place-${tipBox.placement}`}
+            style={tipStyle(tipBox, ownerColor)}
+            role="tooltip"
+          >
+            <i className="owner-name-swatch" aria-hidden />
+            {ownerName}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
