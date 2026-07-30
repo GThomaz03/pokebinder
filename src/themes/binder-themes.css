@@ -1,0 +1,451 @@
+/**
+ * Skins A/B/C scoped to `.binder-view[data-binder-theme]`.
+ * Global site tokens stay untouched outside this subtree.
+ */
+
+.binder-view {
+  /* Defaults = Arquivo until/alongside data-attr */
+  --bg: #eef1f4;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f5f7;
+  --text: #16181d;
+  --muted: #5c6570;
+  --border: rgba(22, 24, 29, 0.1);
+  --border-strong: #c5ccd6;
+  --primary: #0e6e6b;
+  --primary-hover: #0a5856;
+  --accent: #0e6e6b;
+  --accent-soft: rgba(14, 110, 107, 0.14);
+  --danger: #b42318;
+  --success: #1f7a4c;
+  --ring: #0e6e6b;
+  --slot: #e3e8ef;
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Newsreader', 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Sans', system-ui, sans-serif;
+  --radius: 4px;
+  --radius-page: 4px;
+  --btn-radius: 4px;
+  --chip-radius: 4px;
+  --shadow: 0 1px 0 rgba(22, 24, 29, 0.06), 0 8px 20px rgba(22, 24, 29, 0.06);
+  --page-bg: #ffffff;
+  --page-bg-2: #f7f8fa;
+  --chrome: #c5ccd6;
+  --fab-fg: #ffffff;
+  --tray-over-fill: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --slot-radius: 8px;
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 0;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.binder-view h1,
+.binder-view h2,
+.binder-view h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* ——— A: Arquivo ——— */
+.binder-view[data-binder-theme='arquivo'] {
+  --bg: #eef1f4;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f5f7;
+  --text: #16181d;
+  --muted: #5c6570;
+  --border: rgba(22, 24, 29, 0.1);
+  --border-strong: #c5ccd6;
+  --primary: #0e6e6b;
+  --primary-hover: #0a5856;
+  --accent: #0e6e6b;
+  --accent-soft: rgba(14, 110, 107, 0.14);
+  --danger: #b42318;
+  --success: #1f7a4c;
+  --ring: #0e6e6b;
+  --slot: #e3e8ef;
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Newsreader', 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Sans', system-ui, sans-serif;
+  --radius: 4px;
+  --radius-page: 4px;
+  --btn-radius: 4px;
+  --chip-radius: 4px;
+  --shadow: 0 1px 0 rgba(22, 24, 29, 0.05), 0 10px 24px rgba(22, 24, 29, 0.07);
+  --page-bg: #ffffff;
+  --page-bg-2: #f7f8fa;
+  --chrome: #c5ccd6;
+  --fab-fg: #ffffff;
+  --tray-over-fill: color-mix(in srgb, var(--accent) 10%, #ffffff);
+}
+
+/* ——— B: Mesa ——— */
+.binder-view[data-binder-theme='mesa'] {
+  --bg: #0c0e12;
+  --bg-elevated: #12151b;
+  --surface: #171a21;
+  --surface-2: #1e232c;
+  --text: #edeef0;
+  --muted: #8b929c;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: #2a303a;
+  /* Warm brass — desk-lamp, not acid lime */
+  --primary: #d4a017;
+  --primary-hover: #e8b42a;
+  --accent: #e0a84a;
+  --accent-soft: rgba(224, 168, 74, 0.18);
+  --danger: #e85d4c;
+  --success: #6bbf8a;
+  --ring: #e0a84a;
+  --slot: #10131a;
+  --font: 'Space Grotesk', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius: 2px;
+  --radius-page: 2px;
+  --btn-radius: 2px;
+  --chip-radius: 2px;
+  --slot-radius: 12px;
+  --shadow: 4px 4px 0 #000;
+  --page-bg: #141820;
+  --page-bg-2: #10141c;
+  --chrome: #7a93b0;
+  --fab-fg: #0c0e12;
+  --tray-over-fill: color-mix(in srgb, #7a93b0 22%, #171a21);
+}
+
+.binder-view[data-binder-theme='mesa'] .inspect-name,
+.binder-view[data-binder-theme='mesa'] .inspect-set,
+.binder-view[data-binder-theme='mesa'] .price-tag,
+.binder-view[data-binder-theme='mesa'] .pager span {
+  font-family: var(--font-mono);
+}
+
+.binder-view[data-binder-theme='mesa'] .kind-pill,
+.binder-view[data-binder-theme='mesa'] .inspect-panel h3,
+.binder-view[data-binder-theme='mesa'] .tray-head strong {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.65rem;
+}
+
+/* ——— C: Ringbound ——— */
+.binder-view[data-binder-theme='ringbound'] {
+  --bg: #c8d0da;
+  --bg-elevated: #d5dce6;
+  --surface: #e8edf3;
+  --surface-2: #dce3ec;
+  --text: #1c222c;
+  --muted: #4e5866;
+  --border: rgba(28, 34, 44, 0.12);
+  --border-strong: #9aa6b4;
+  --primary: #6b1e2a;
+  --primary-hover: #821f2f;
+  --accent: #6b1e2a;
+  --accent-soft: rgba(107, 30, 42, 0.14);
+  --danger: #8f1d2c;
+  --success: #2f6b4f;
+  --ring: #6b1e2a;
+  --slot: #d7dee8;
+  --font: 'Source Sans 3', system-ui, sans-serif;
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-mono: 'Source Sans 3', system-ui, sans-serif;
+  --radius: 8px;
+  --radius-page: 10px;
+  --btn-radius: 6px;
+  --chip-radius: 6px;
+  --shadow: 0 2px 0 rgba(28, 34, 44, 0.12);
+  --page-bg: #e8edf3;
+  --page-bg-2: #dde4ee;
+  --chrome: #9aa6b4;
+  --fab-fg: #f5f7fa;
+  --tray-over-fill: color-mix(in srgb, var(--accent) 10%, #e8edf3);
+}
+
+/* ——— Shared structural overrides inside binder ——— */
+
+.binder-view .kind-pill,
+.binder-view .btn-ghost,
+.binder-view .batch-bar,
+.binder-view .batch-bar button {
+  border-radius: var(--btn-radius);
+}
+
+.binder-view .kind-pill {
+  border-radius: var(--chip-radius);
+}
+
+.binder-view .pager button,
+.binder-view .icon-btn,
+.binder-view .inspect-panel,
+.binder-view .inspect-img,
+.binder-view .fab,
+.binder-view .tools-side > button,
+.binder-view .tool-panel,
+.binder-view .tray-bar,
+.binder-view .page-panel,
+.binder-view .tray-count {
+  border-radius: var(--radius);
+}
+
+.binder-view .b-slot-frame {
+  border-radius: var(--slot-radius, 8px);
+}
+
+.binder-view .page-panel {
+  border-radius: var(--radius-page);
+  background: linear-gradient(180deg, var(--page-bg), var(--page-bg-2));
+  box-shadow: var(--shadow);
+  border-color: var(--border-strong);
+}
+
+.binder-view .inspect-panel,
+.binder-view .batch-bar,
+.binder-view .tool-panel,
+.binder-view .tip {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.binder-view .fab {
+  background: var(--primary);
+  color: var(--fab-fg);
+  box-shadow: var(--shadow);
+}
+
+.binder-view .tray-bar {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+  box-shadow: none;
+}
+
+.binder-view .tray-bar.over {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--tray-over-fill);
+  box-shadow: none;
+}
+
+.binder-view .tray-count {
+  border-radius: var(--chip-radius);
+  background: var(--primary);
+  color: var(--fab-fg);
+}
+
+.binder-view .tools-side > button.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--fab-fg);
+}
+
+.binder-view .tools-side > button em {
+  border-radius: var(--chip-radius);
+}
+
+.binder-view .price-tag {
+  border-radius: var(--chip-radius);
+}
+
+.binder-view .b-slot.is-over .b-slot-frame,
+.binder-view .b-slot.is-selected .b-slot-frame {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Theme picker */
+.theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.theme-picker-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+
+.theme-picker button {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--btn-radius);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  min-width: 4.5rem;
+}
+
+.theme-picker button small {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--muted);
+  max-width: 7.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.theme-picker button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text);
+}
+
+.theme-picker button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* A: archival rules */
+.binder-view[data-binder-theme='arquivo'] .page-panel {
+  box-shadow: var(--shadow);
+  border-width: 1px;
+}
+
+.binder-view[data-binder-theme='arquivo'] .pager span {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.binder-view[data-binder-theme='arquivo'] .view-top h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* B: hard edges / steel tray */
+.binder-view[data-binder-theme='mesa'] .tray-bar {
+  border-style: dashed;
+  border-color: var(--chrome);
+}
+
+.binder-view[data-binder-theme='mesa'] .tray-bar.over {
+  border-style: solid;
+  border-color: var(--chrome);
+  background: var(--tray-over-fill);
+}
+
+.binder-view[data-binder-theme='mesa'] .page-panel {
+  background: var(--page-bg);
+  box-shadow: var(--shadow);
+}
+
+.binder-view[data-binder-theme='mesa'] .btn-ghost:hover,
+.binder-view[data-binder-theme='mesa'] .pager button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Card-shaped sleeves: corners match Pokémon TCG art */
+.binder-view[data-binder-theme='mesa'] .b-slot-frame {
+  border-radius: var(--slot-radius, 12px);
+  border-color: transparent;
+  background: transparent;
+}
+
+.binder-view[data-binder-theme='mesa'] .b-slot-frame img,
+.binder-view[data-binder-theme='mesa'] .b-slot-frame .ph {
+  border-radius: inherit;
+}
+
+.binder-view[data-binder-theme='mesa'] .b-slot-frame .empty-mark,
+.binder-view[data-binder-theme='mesa'] .b-slot-frame .card-back,
+.binder-view[data-binder-theme='mesa'] .b-slot-frame .dex-placeholder {
+  border-radius: inherit;
+  border: 1px solid var(--border-strong);
+  background-color: var(--slot);
+}
+
+.binder-view[data-binder-theme='mesa'] .b-slot.is-over .b-slot-frame,
+.binder-view[data-binder-theme='mesa'] .b-slot.is-selected .b-slot-frame {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.binder-view[data-binder-theme='mesa'] .tray-thumb {
+  border-radius: 10px;
+  border-color: transparent;
+  overflow: hidden;
+}
+
+.binder-view[data-binder-theme='mesa'] .pin-badge {
+  color: #0c0e12;
+}
+
+/* C: spine / ring holes on tray column */
+.binder-view[data-binder-theme='ringbound'] .tray-bar {
+  border-style: solid;
+  border-color: var(--chrome);
+  background:
+    radial-gradient(circle at 50% 18%, var(--chrome) 0 5px, transparent 6px),
+    radial-gradient(circle at 50% 38%, var(--chrome) 0 5px, transparent 6px),
+    radial-gradient(circle at 50% 58%, var(--chrome) 0 5px, transparent 6px),
+    radial-gradient(circle at 50% 78%, var(--chrome) 0 5px, transparent 6px),
+    linear-gradient(90deg, #6b1e2a 0 10px, var(--surface) 10px);
+  padding-left: 0.85rem;
+}
+
+.binder-view[data-binder-theme='ringbound'] .page-panel {
+  border-color: var(--chrome);
+}
+
+.binder-view[data-binder-theme='ringbound'] .spread.with-tray .page-panel {
+  transition: transform 0.18s ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .binder-view[data-binder-theme='ringbound'] .spread.with-tray .page-panel:hover {
+    transform: translateY(-2px);
+  }
+
+  .binder-view[data-binder-theme='arquivo'] .binder-main {
+    animation: binder-fade-in 0.22s ease;
+  }
+}
+
+@keyframes binder-fade-in {
+  from {
+    opacity: 0.72;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modals nested under binder-view inherit tokens */
+.binder-view .modal-backdrop .add-modal,
+.binder-view .details-backdrop .details-modal,
+.binder-view .dex-backdrop .dex-modal,
+.binder-view .settings-backdrop .settings-drawer {
+  border-radius: var(--radius-page);
+  font-family: var(--font);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.binder-view .owned-count,
+.binder-view .batch-bar button {
+  border-radius: var(--chip-radius);
+}

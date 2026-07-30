@@ -1,0 +1,242 @@
+.binders-page {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.binders-hero {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border-radius: var(--radius-page);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--accent);
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.binders-hero h1 {
+  margin: 0.35rem 0 0.5rem;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
+}
+
+.binders-hero > p {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--muted);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.btn {
+  appearance: none;
+  border: 0;
+  border-radius: var(--btn-radius);
+  padding: 0.7rem 1.15rem;
+  font-weight: 750;
+  font-size: 0.92rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: var(--fab-fg);
+}
+
+.btn.primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn.accent {
+  background: var(--accent);
+  color: var(--fab-fg);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.btn.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.kind.wishlist {
+  background: color-mix(in srgb, var(--chrome) 28%, transparent);
+  color: var(--chrome);
+}
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+}
+
+.binder-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.binder-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.binder-open {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+  padding: 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.kind {
+  width: fit-content;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--chip-radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.kind.pokedex {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.binder-open h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.binder-open p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.binder-open .bar {
+  height: 6px;
+  border-radius: var(--chip-radius);
+  background: var(--slot);
+  overflow: hidden;
+  margin-top: 0.35rem;
+}
+
+.binder-open .bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.pct {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.delete {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--danger);
+  flex: 1;
+  padding: 0.55rem;
+  font-weight: 650;
+  font-size: 0.8rem;
+}
+
+.card-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+.rename {
+  appearance: none;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  flex: 1;
+  padding: 0.55rem;
+  font-weight: 650;
+  font-size: 0.8rem;
+}
+
+.rename:hover {
+  color: var(--accent);
+}
+
+.name-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(2, 6, 23, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.name-modal {
+  width: min(400px, 100%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  padding: 1.15rem 1.2rem;
+  display: grid;
+  gap: 0.85rem;
+  box-shadow: var(--shadow);
+}
+
+.name-modal h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.name-modal label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.name-modal input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--btn-radius);
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+}
+
+.name-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

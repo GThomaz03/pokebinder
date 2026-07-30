@@ -1,0 +1,158 @@
+.repo-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.repo-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.repo-head h1 {
+  margin: 0.25rem 0 0.35rem;
+}
+
+.repo-head p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 52ch;
+}
+
+.repo-head .back {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+.repo-head .back:hover {
+  color: var(--accent);
+}
+
+.repo-head input {
+  min-width: min(280px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--btn-radius);
+  color: var(--text);
+  padding: 0.65rem 1rem;
+}
+
+.set-progress h2,
+.repo-list h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+
+.set-grid article {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-page);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.25rem;
+  box-shadow: var(--shadow);
+}
+
+.set-grid .bar {
+  height: 6px;
+  border-radius: var(--chip-radius);
+  background: var(--slot);
+  overflow: hidden;
+}
+
+.set-grid .bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.repo-card {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-page);
+  padding: 0.65rem;
+}
+
+.repo-card img,
+.repo-card .ph {
+  width: 72px;
+  aspect-ratio: 63 / 88;
+  object-fit: cover;
+  border-radius: var(--slot-radius);
+  background: var(--slot);
+}
+
+.repo-card strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.repo-card span {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.repo-card .price {
+  color: var(--accent);
+  font-weight: 700;
+  margin: 0.2rem 0;
+  font-family: var(--font-mono);
+}
+
+.qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.qty button {
+  appearance: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: var(--btn-radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.qty input {
+  width: 3rem;
+  text-align: center;
+  background: var(--slot);
+  border: 1px solid var(--border);
+  border-radius: var(--btn-radius);
+  color: var(--text);
+  padding: 0.25rem;
+  font-family: var(--font-mono);
+}

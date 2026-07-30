@@ -1,0 +1,261 @@
+.binder-view {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.45rem;
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.view-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.view-top h1 {
+  margin: 0;
+  flex: 1;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  line-height: 1.2;
+}
+
+.back {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 0.85rem;
+}
+
+.back:hover {
+  color: var(--accent);
+}
+
+.view-actions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.kind-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--chip-radius, 4px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.btn-ghost {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--btn-radius, 4px);
+  padding: 0.35rem 0.7rem;
+  font-weight: 650;
+  font-size: 0.78rem;
+}
+
+.binder-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(160px, 200px);
+  gap: 0.55rem;
+  align-items: stretch;
+  position: relative;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.binder-main {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.4rem;
+  overflow: hidden;
+}
+
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.pager button {
+  appearance: none;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: var(--btn-radius, 4px);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.pager button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pager span {
+  min-width: 4.25rem;
+  text-align: center;
+  font-weight: 750;
+  font-size: 0.85rem;
+}
+
+.inspect-panel {
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page, 8px);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.inspect-panel h3 {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.inspect-img {
+  width: 100%;
+  max-width: 160px;
+  border-radius: var(--slot-radius, 8px);
+  justify-self: center;
+}
+
+.inspect-name {
+  margin: 0;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.inspect-set,
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.fab {
+  position: fixed;
+  right: 1rem;
+  bottom: 0.85rem;
+  z-index: 40;
+  width: 2.85rem;
+  height: 2.85rem;
+  border-radius: var(--radius-page, 8px);
+  border: 0;
+  background: var(--primary);
+  color: var(--fab-fg, #fff);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: var(--shadow, 0 8px 20px rgba(0, 0, 0, 0.25));
+}
+
+.binder-view.has-batch .fab {
+  bottom: 4.75rem;
+}
+
+.batch-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 0.75rem;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  gap: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--btn-radius, 4px);
+  padding: 0.4rem;
+  box-shadow: var(--shadow, 0 8px 20px rgba(0, 0, 0, 0.25));
+}
+
+@media (max-width: 900px) {
+  .binder-view.has-batch .fab {
+    bottom: 4.75rem;
+  }
+}
+
+.batch-bar button {
+  appearance: none;
+  border: 0;
+  border-radius: var(--chip-radius, 4px);
+  background: var(--primary);
+  color: var(--fab-fg, #fff);
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 0.45rem 0.8rem;
+}
+
+.batch-bar button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.missing {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+}
+
+.missing a {
+  color: var(--accent);
+}
+
+@media (max-width: 1100px) {
+  .binder-layout {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .inspect-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .binder-view {
+    overflow: auto;
+  }
+
+  .binder-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .binder-main {
+    height: auto;
+  }
+
+  .app-shell:has(.binder-view) {
+    height: auto;
+    max-height: none;
+    overflow: auto;
+  }
+}

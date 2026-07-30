@@ -1,0 +1,339 @@
+.decks-page {
+  display: grid;
+  gap: 1.75rem;
+}
+
+.decks-hero {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.5rem;
+  align-items: stretch;
+  padding: clamp(1.4rem, 3.5vw, 2.4rem);
+  border-radius: var(--radius-page);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  position: relative;
+}
+
+.decks-eyebrow {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  color: var(--accent);
+  line-height: 0.95;
+}
+
+.decks-hero h1 {
+  margin: 0.2rem 0 0.55rem;
+  font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+}
+
+.decks-hero-copy > p:not(.decks-eyebrow) {
+  margin: 0 0 1.1rem;
+  max-width: 42ch;
+  color: var(--muted);
+}
+
+.decks-hero-art {
+  position: relative;
+  min-height: 180px;
+}
+
+.orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.orbit.o1 {
+  width: 160px;
+  height: 160px;
+  right: 18%;
+  top: 10%;
+}
+
+.orbit.o2 {
+  width: 220px;
+  height: 220px;
+  right: 4%;
+  top: -8%;
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.hero-card {
+  position: absolute;
+  width: 72px;
+  aspect-ratio: 63 / 88;
+  border-radius: var(--slot-radius);
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(160deg, var(--surface-2), var(--slot) 70%);
+  box-shadow: var(--shadow);
+  animation: float-card 5s ease-in-out infinite;
+}
+
+.hero-card.c1 {
+  right: 42%;
+  top: 28%;
+  transform: rotate(-12deg);
+}
+
+.hero-card.c2 {
+  right: 22%;
+  top: 18%;
+  transform: rotate(6deg);
+  animation-delay: 0.4s;
+  background: linear-gradient(160deg, #3a2a12, var(--slot) 70%);
+}
+
+.hero-card.c3 {
+  right: 8%;
+  top: 36%;
+  transform: rotate(14deg);
+  animation-delay: 0.8s;
+  background: linear-gradient(160deg, #1a2f4a, var(--slot) 70%);
+}
+
+@keyframes float-card {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+
+.btn {
+  appearance: none;
+  border: 0;
+  border-radius: var(--btn-radius);
+  padding: 0.7rem 1.15rem;
+  font-weight: 750;
+  font-size: 0.92rem;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: var(--fab-fg);
+}
+
+.btn.accent {
+  background: var(--accent);
+  color: var(--fab-fg);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.decks-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-page);
+  color: var(--muted);
+}
+
+.decks-empty h2 {
+  margin: 0 0 0.4rem;
+  color: var(--text);
+}
+
+.deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.deck-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+.deck-open {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 1rem;
+  display: grid;
+  gap: 0.45rem;
+  flex: 1;
+}
+
+.deck-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.legal-pill,
+.miss-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--chip-radius);
+}
+
+.legal-pill.ok {
+  background: color-mix(in srgb, var(--success) 22%, transparent);
+  color: var(--success);
+}
+
+.legal-pill.bad {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+
+.miss-pill {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: #fca5a5;
+}
+
+.deck-open h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.deck-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.deck-bars {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr 2.6rem;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.bar-row .bar {
+  height: 6px;
+  border-radius: var(--chip-radius);
+  background: var(--slot);
+  overflow: hidden;
+}
+
+.bar-row .bar i {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+}
+
+.bar-row .bar.own i {
+  background: var(--accent);
+}
+
+.bar-row em {
+  font-style: normal;
+  text-align: right;
+  font-weight: 700;
+}
+
+.deck-card-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+.deck-card-actions button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  flex: 1;
+  padding: 0.55rem;
+  font-weight: 650;
+  font-size: 0.8rem;
+}
+
+.deck-card-actions button:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.deck-card-actions button.danger {
+  color: var(--danger);
+}
+
+.name-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(2, 6, 23, 0.6);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.name-modal {
+  width: min(400px, 100%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  padding: 1.15rem 1.2rem;
+  display: grid;
+  gap: 0.85rem;
+  box-shadow: var(--shadow);
+}
+
+.name-modal h2 {
+  margin: 0;
+}
+
+.name-modal label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.name-modal input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--btn-radius);
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+}
+
+.name-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@media (max-width: 800px) {
+  .decks-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .decks-hero-art {
+    min-height: 120px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-card {
+    animation: none;
+  }
+}

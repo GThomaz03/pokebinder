@@ -1,0 +1,147 @@
+.shared-view {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 960px;
+  margin-inline: auto;
+}
+
+.shared-status,
+.shared-error {
+  text-align: center;
+  color: var(--muted);
+}
+
+.shared-error {
+  color: var(--danger);
+}
+
+.shared-header h1 {
+  margin: 0.25rem 0 0.35rem;
+  font-family: var(--font-display);
+}
+
+.shared-eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.shared-meta {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.shared-spread-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.shared-pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.shared-page {
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+}
+
+.shared-page h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.shared-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.shared-slot {
+  aspect-ratio: 2.5 / 3.5;
+  border-radius: var(--slot-radius);
+  overflow: hidden;
+  background: var(--slot);
+  border: 1px solid var(--border);
+}
+
+.shared-slot.empty {
+  opacity: 0.35;
+}
+
+.shared-slot.pokedex {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.35rem;
+}
+
+.shared-slot .dex-label,
+.shared-slot .dex-name {
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.shared-slot.card img,
+.shared-slot.pokedex img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shared-deck-notes {
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+
+.shared-deck-total {
+  font-weight: 700;
+}
+
+.shared-deck-group h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.shared-deck-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.shared-deck-group li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--btn-radius);
+}
+
+.shared-deck-group .qty {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  min-width: 2rem;
+}
+
+.shared-deck-group .set {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+}

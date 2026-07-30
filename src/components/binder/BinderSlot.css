@@ -1,0 +1,265 @@
+.b-slot {
+  position: relative;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  --cell-h: calc((100cqh - (var(--rows, 3) - 1) * var(--grid-gap, 6px)) / var(--rows, 3));
+  --cell-w: min(
+    calc(var(--cell-h) * 63 / 88),
+    calc((100cqw - (var(--cols, 3) - 1) * var(--grid-gap, 6px)) / var(--cols, 3))
+  );
+  width: var(--cell-w);
+  height: calc(var(--cell-w) * 88 / 63);
+  min-height: 0;
+  touch-action: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  text-align: inherit;
+}
+
+.b-slot.is-draggable {
+  cursor: grab;
+}
+
+.b-slot.is-draggable:active,
+.b-slot.is-dragging {
+  cursor: grabbing;
+}
+
+.b-slot.is-dragging {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.b-slot.is-selected .b-slot-frame {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.b-slot.is-hit .b-slot-frame {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.hover-actions {
+  position: absolute;
+  inset: auto 0.25rem 0.25rem 0.25rem;
+  display: none;
+  gap: 0.2rem;
+  justify-content: center;
+  z-index: 5;
+  flex-wrap: wrap;
+}
+
+.b-slot:hover .hover-actions,
+.b-slot:focus-within .hover-actions,
+.b-slot.menu-open .hover-actions {
+  display: flex;
+}
+
+.slot-menu-btn {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  z-index: 6;
+  appearance: none;
+  border: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.88);
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.b-slot:hover .slot-menu-btn,
+.b-slot:focus-within .slot-menu-btn,
+.b-slot.menu-open .slot-menu-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none), (max-width: 900px) {
+  .slot-menu-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .b-slot.menu-open .hover-actions {
+    display: flex;
+  }
+
+  .b-slot:not(.menu-open):not(:focus-within) .hover-actions {
+    display: none;
+  }
+}
+
+.hover-actions button {
+  appearance: none;
+  border: 0;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.92);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.hover-actions button.danger {
+  background: rgba(220, 38, 38, 0.95);
+}
+
+.hover-actions button.active {
+  background: var(--accent);
+  color: #111;
+}
+
+.b-slot.is-pinned .b-slot-frame {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.pin-badge {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.3rem;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #111;
+  z-index: 2;
+}
+
+.b-slot-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--slot-radius, 8px);
+  overflow: hidden;
+  background: var(--slot);
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, box-shadow 0.15s, filter 0.2s;
+}
+
+.b-slot.is-over .b-slot-frame {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.b-slot.is-dim .b-slot-frame {
+  filter: grayscale(0.7) brightness(0.65);
+}
+
+.b-slot-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.empty-mark {
+  display: block;
+  height: 100%;
+  background:
+    linear-gradient(135deg, transparent 46%, rgba(255, 255, 255, 0.04) 50%, transparent 54%),
+    var(--slot);
+}
+
+.card-back {
+  display: block;
+  height: 100%;
+  background:
+    radial-gradient(circle at 50% 45%, #1e3a5f 0%, #0b1220 62%),
+    #0b1220;
+  border: 3px solid #334155 inset;
+}
+
+.card-back::after {
+  content: '';
+  position: absolute;
+  inset: 18%;
+  border: 2px solid rgba(217, 119, 6, 0.35);
+  border-radius: 50%;
+}
+
+.dex-placeholder {
+  display: grid;
+  place-content: center;
+  gap: 0.2rem;
+  height: 100%;
+  padding: 0.4rem;
+  text-align: center;
+}
+
+.dex-placeholder strong {
+  font-size: 0.7rem;
+  color: var(--accent);
+}
+
+.dex-placeholder em {
+  font-style: normal;
+  font-size: 0.62rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.dex-placeholder small {
+  font-size: 0.55rem;
+  color: var(--success);
+}
+
+.price-tag {
+  position: absolute;
+  left: 0.3rem;
+  bottom: 0.3rem;
+  font-size: clamp(0.55rem, 1.1vw, 0.72rem);
+  font-weight: 800;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fef3c7;
+}
+
+.owned-count {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: var(--chip-radius, 4px);
+  background: var(--primary);
+  color: var(--fab-fg, #fff);
+  font-size: 0.55rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.missing-badge {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.2rem;
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.12rem 0.25rem;
+  border-radius: 3px;
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+}

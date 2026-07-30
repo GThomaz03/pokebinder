@@ -1,0 +1,35 @@
+.cloud-merge-banner {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  z-index: 150;
+  transform: translateX(-50%);
+  width: min(640px, calc(100% - 2rem));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.cloud-merge-banner strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.cloud-merge-banner p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.cloud-merge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
