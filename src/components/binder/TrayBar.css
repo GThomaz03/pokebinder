@@ -3,7 +3,8 @@
   z-index: 25;
   width: 100%;
   min-height: 0;
-  height: 100%;
+  align-self: stretch;
+  height: auto;
   background: var(--surface);
   border: 2px dashed color-mix(in srgb, var(--accent) 60%, var(--border-strong));
   border-radius: var(--radius-page, 8px);

@@ -10,7 +10,7 @@ import {
 } from '@dnd-kit/core'
 import { useMemo, useState } from 'react'
 import type { Binder, BinderPage, SlotRef } from '../../types'
-import { gridCols, gridRows, slotDisplayCardId } from '../../types'
+import { slotDisplayCardId } from '../../types'
 import { getCachedCard } from '../../api/prices'
 import { baseCardId } from '../../api/tcgdex'
 import {
@@ -22,7 +22,7 @@ import {
 } from '../../lib/binderDnd'
 import { CardImage } from '../CardImage'
 import { useTray } from '../../hooks/useTray'
-import { BinderSlot } from './BinderSlot'
+import { PagePanel, PagePlaceholder } from './PagePanel'
 import { TrayBar } from './TrayBar'
 import './BinderSpread.css'
 
@@ -77,12 +77,6 @@ export function BinderSpread({
   onDeletePage,
   showTray = true,
 }: Props) {
-  const cols = gridCols(binder.grid)
-  const rows = gridRows(binder.grid)
-  const gridStyle = {
-    ['--cols' as string]: cols,
-    ['--rows' as string]: rows,
-  }
   const { peekItem } = useTray()
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(
@@ -160,190 +154,64 @@ export function BinderSpread({
     }
   }
 
+  const pageProps = {
+    binder,
+    selectMode,
+    selected,
+    searchHits,
+    onActivate,
+    onSelect,
+    onRemove,
+    onToTray,
+    onReplace,
+    onPin,
+    onEdit,
+    onMarkMissing,
+    onDetails,
+    onLabelChange,
+    onDeletePage,
+  }
+
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={binderCollision}
-      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragCancel={onDragCancel}
-    >
-      <div className={`spread ${showTray ? 'with-tray' : ''}`}>
-        <PagePanel
-          page={leftPage}
-          pageIndex={leftIndex}
-          gridStyle={gridStyle}
-          binder={binder}
-          selectMode={selectMode}
-          selected={selected}
-          searchHits={searchHits}
-          onActivate={onActivate}
-          onSelect={onSelect}
-          onRemove={onRemove}
-          onToTray={onToTray}
-          onReplace={onReplace}
-          onPin={onPin}
-          onEdit={onEdit}
-          onMarkMissing={onMarkMissing}
-          onDetails={onDetails}
-          onLabelChange={onLabelChange}
-          onDeletePage={onDeletePage}
-        />
+    <div className="spread-host">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={binderCollision}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
+      >
+        <div className={`spread ${showTray ? 'with-tray' : ''}`}>
+          <PagePanel page={leftPage} pageIndex={leftIndex} {...pageProps} />
 
-        {showTray && <TrayBar />}
+          {showTray && <TrayBar />}
 
-        {rightPage ? (
-          <PagePanel
-            page={rightPage}
-            pageIndex={rightIndex}
-            gridStyle={gridStyle}
-            binder={binder}
-            selectMode={selectMode}
-            selected={selected}
-            searchHits={searchHits}
-            onActivate={onActivate}
-            onSelect={onSelect}
-            onRemove={onRemove}
-            onToTray={onToTray}
-            onReplace={onReplace}
-            onPin={onPin}
-            onEdit={onEdit}
-            onMarkMissing={onMarkMissing}
-            onDetails={onDetails}
-            onLabelChange={onLabelChange}
-            onDeletePage={onDeletePage}
-          />
-        ) : (
-          <section className="page-panel is-placeholder" aria-hidden>
-            <div className="page-toolbar">
-              <span className="page-label placeholder-label">Sem página direita</span>
+          {rightPage ? (
+            <PagePanel page={rightPage} pageIndex={rightIndex} {...pageProps} />
+          ) : (
+            <PagePlaceholder binder={binder} />
+          )}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeCardKey ? (
+            <div className="drag-ghost">
+              <CardImage
+                src={activeCached?.image}
+                alt=""
+                quality="low"
+                cardId={baseCardId(activeCardKey)}
+                cardName={activeCached?.name}
+                localId={activeCached?.localId}
+                draggable={false}
+              />
             </div>
-            <div className="page-grid placeholder-grid" style={gridStyle} />
-          </section>
-        )}
-      </div>
-
-      <DragOverlay dropAnimation={null}>
-        {activeCardKey ? (
-          <div className="drag-ghost">
-            <CardImage
-              src={activeCached?.image}
-              alt=""
-              quality="low"
-              cardId={baseCardId(activeCardKey)}
-              cardName={activeCached?.name}
-              localId={activeCached?.localId}
-              draggable={false}
-            />
-          </div>
-        ) : activeId ? (
-          <div className="drag-ghost empty" />
-        ) : null}
-      </DragOverlay>
-    </DndContext>
-  )
-}
-
-function PagePanel({
-  page,
-  pageIndex,
-  gridStyle,
-  binder,
-  selectMode,
-  selected,
-  searchHits,
-  onActivate,
-  onSelect,
-  onRemove,
-  onToTray,
-  onReplace,
-  onPin,
-  onEdit,
-  onMarkMissing,
-  onDetails,
-  onLabelChange,
-  onDeletePage,
-}: {
-  page: BinderPage
-  pageIndex: number
-  gridStyle: Record<string, number>
-  binder: Binder
-  selectMode?: boolean
-  selected?: Set<string>
-  searchHits?: Set<string>
-  onActivate: (ref: SlotRef) => void
-  onSelect?: (ref: SlotRef) => void
-  onRemove?: (ref: SlotRef) => void
-  onToTray?: (ref: SlotRef) => void
-  onReplace?: (ref: SlotRef) => void
-  onPin?: (ref: SlotRef) => void
-  onEdit?: (ref: SlotRef) => void
-  onMarkMissing?: (ref: SlotRef) => void
-  onDetails?: (ref: SlotRef) => void
-  onLabelChange: (pageIndex: number, label: string) => void
-  onDeletePage: (pageIndex: number) => void
-}) {
-  return (
-    <section className="page-panel">
-      <div className="page-toolbar">
-        <button
-          type="button"
-          className="icon-btn"
-          title="Limpar página"
-          onClick={() => onDeletePage(pageIndex)}
-          aria-label="Limpar página"
-        >
-          <TrashIcon />
-        </button>
-        <input
-          className="page-label"
-          value={page.label ?? ''}
-          placeholder="Clique para nomear a página"
-          onChange={(e) => onLabelChange(pageIndex, e.target.value)}
-        />
-      </div>
-
-      <div className="page-grid" style={gridStyle}>
-        {page.slots.map((slot, slotIndex) => {
-          const ref = { pageIndex, slotIndex }
-          const id = `p${pageIndex}-s${slotIndex}`
-          return (
-            <BinderSlot
-              key={`${page.id}-${slotIndex}`}
-              slotRef={ref}
-              slot={slot}
-              binder={binder}
-              settings={binder.settings}
-              selectMode={selectMode}
-              selected={selected?.has(id)}
-              searchHit={searchHits?.has(id)}
-              onActivate={() => onActivate(ref)}
-              onSelect={() => onSelect?.(ref)}
-              onRemove={() => onRemove?.(ref)}
-              onToTray={() => onToTray?.(ref)}
-              onReplace={() => onReplace?.(ref)}
-              onPin={() => onPin?.(ref)}
-              onEdit={() => onEdit?.(ref)}
-              onMarkMissing={() => onMarkMissing?.(ref)}
-              onDetails={() => onDetails?.(ref)}
-            />
-          )
-        })}
-      </div>
-    </section>
-  )
-}
-
-function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
+          ) : activeId ? (
+            <div className="drag-ghost empty" />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
   )
 }

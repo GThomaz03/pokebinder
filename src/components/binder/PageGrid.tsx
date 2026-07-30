@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useFitBox } from '../../hooks/useFitBox'
 import './PageGrid.css'
 
 type Props = {
@@ -11,23 +12,23 @@ type Props = {
 /**
  * The card grid for a single page.
  *
- * Structure: `.page-grid-wrap` (fills leftover space in PagePanel and
- * establishes a size container) → `.page-grid` (fitted to `aspect` with
- * container query units so it never feeds back into the wrap's height).
- *
- * Because `.page-grid` is sized to the page aspect before the cols×rows
- * tracks split it, every cell is already card-shaped.
+ * `.page-grid-wrap` fills leftover space in PagePanel; useFitBox measures
+ * it and sizes `.page-grid` to the largest box of `aspect` that fits.
  */
 export function PageGrid({ cols, rows, aspect, children }: Props) {
-  const style = {
-    ['--cols' as string]: cols,
-    ['--rows' as string]: rows,
-    ['--page-aspect' as string]: aspect,
-  }
+  const { ref, size } = useFitBox(aspect)
 
   return (
-    <div className="page-grid-wrap">
-      <div className="page-grid" style={style}>
+    <div className="page-grid-wrap" ref={ref}>
+      <div
+        className="page-grid"
+        style={{
+          ['--cols' as string]: cols,
+          ['--rows' as string]: rows,
+          width: size ? `${size.width}px` : undefined,
+          height: size ? `${size.height}px` : undefined,
+        }}
+      >
         {children}
       </div>
     </div>
