@@ -104,6 +104,13 @@
   white-space: nowrap;
 }
 
+.shared-top__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .shared-view .btn {
   appearance: none;
   border: 0;

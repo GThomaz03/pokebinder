@@ -1,9 +1,16 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShareModal } from '../components/ShareModal'
+import { useAuth } from '../hooks/useAuth'
 import { useDecks } from '../hooks/useDecks'
 import { useInventory } from '../hooks/useInventory'
 import { deckTotal, validateDeck } from '../lib/deckRules'
+import {
+  listMyPublished,
+  publishResourceToProfile,
+  unpublishResource,
+  type PublishedResource,
+} from '../lib/social'
 import type { Deck } from '../types'
 import './Decks.css'
 
@@ -14,10 +21,29 @@ type ModalState =
 
 export function DecksPage() {
   const navigate = useNavigate()
+  const { user, requireAuth } = useAuth()
   const { decks, createDeck, renameDeck, deleteDeck } = useDecks()
   const { getQty } = useInventory()
   const [modal, setModal] = useState<ModalState>(null)
   const [shareTarget, setShareTarget] = useState<Deck | null>(null)
+  const [published, setPublished] = useState<PublishedResource[]>([])
+  const [pubBusy, setPubBusy] = useState<string | null>(null)
+
+  const refreshPublished = useCallback(async () => {
+    if (!user) {
+      setPublished([])
+      return
+    }
+    try {
+      setPublished(await listMyPublished(user.id))
+    } catch {
+      /* ignore if tables missing */
+    }
+  }, [user])
+
+  useEffect(() => {
+    void refreshPublished()
+  }, [refreshPublished])
 
   function submit(name: string) {
     if (!modal) return
@@ -31,6 +57,27 @@ export function DecksPage() {
     }
     renameDeck(modal.id, trimmed)
     setModal(null)
+  }
+
+  function isPublished(deckId: string) {
+    return published.some((p) => p.resourceType === 'deck' && p.resourceId === deckId)
+  }
+
+  async function togglePublish(deck: Deck) {
+    if (!requireAuth() || !user) return
+    setPubBusy(deck.id)
+    try {
+      if (isPublished(deck.id)) {
+        await unpublishResource(user.id, 'deck', deck.id, false)
+      } else {
+        await publishResourceToProfile(user.id, 'deck', deck.id, deck.name, deck)
+      }
+      await refreshPublished()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Erro ao publicar.')
+    } finally {
+      setPubBusy(null)
+    }
   }
 
   return (
@@ -70,8 +117,8 @@ export function DecksPage() {
             const total = deckTotal(deck)
             const v = validateDeck(deck, getQty)
             const pct = Math.min(100, Math.round((total / 60) * 100))
-            const ownPct =
-              total > 0 ? Math.round((v.ownedNeeded / total) * 100) : 0
+            const ownPct = total > 0 ? Math.round((v.ownedNeeded / total) * 100) : 0
+            const onProfile = isPublished(deck.id)
             return (
               <article key={deck.id} className="deck-card">
                 <button
@@ -86,6 +133,7 @@ export function DecksPage() {
                     {v.missingNeeded > 0 && (
                       <span className="miss-pill">Faltam {v.missingNeeded}</span>
                     )}
+                    {onProfile && <span className="miss-pill">No perfil</span>}
                   </div>
                   <h2>{deck.name}</h2>
                   <p className="deck-meta">
@@ -111,6 +159,13 @@ export function DecksPage() {
                 <div className="deck-card-actions">
                   <button type="button" onClick={() => setShareTarget(deck)}>
                     Compartilhar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pubBusy === deck.id}
+                    onClick={() => void togglePublish(deck)}
+                  >
+                    {pubBusy === deck.id ? '…' : onProfile ? 'Despublicar' : 'Publicar no perfil'}
                   </button>
                   <button
                     type="button"
@@ -151,6 +206,7 @@ export function DecksPage() {
         resourceId={shareTarget?.id ?? ''}
         title={shareTarget?.name ?? ''}
         snapshot={shareTarget}
+        onPublished={() => void refreshPublished()}
       />
     </div>
   )

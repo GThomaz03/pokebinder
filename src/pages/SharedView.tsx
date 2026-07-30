@@ -8,6 +8,7 @@ import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { fetchShareLink, type ShareLink } from '../lib/cloudStorage'
 import { deckTotal } from '../lib/deckRules'
 import { binderTotalBrl, getPokedexName } from '../lib/binderUtils'
+import { getShareOwnerProfile, type Profile } from '../lib/social'
 import type { Binder, Deck, PriceMarket, Slot } from '../types'
 import { gridCols, gridRows, pageGridAspect, slotDisplayCardId } from '../types'
 import './SharedView.css'
@@ -15,6 +16,7 @@ import './SharedView.css'
 export function SharedViewPage() {
   const { token = '' } = useParams()
   const [link, setLink] = useState<ShareLink | null>(null)
+  const [owner, setOwner] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,11 +24,21 @@ export function SharedViewPage() {
     let cancelled = false
     setLoading(true)
     setError(null)
+    setOwner(null)
     fetchShareLink(token)
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return
-        if (!data) setError('Link inválido ou expirado.')
-        else setLink(data)
+        if (!data) {
+          setError('Link inválido ou expirado.')
+          return
+        }
+        setLink(data)
+        try {
+          const profile = await getShareOwnerProfile(token)
+          if (!cancelled) setOwner(profile)
+        } catch {
+          /* owner lookup optional */
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Erro ao carregar.')
@@ -58,6 +70,9 @@ export function SharedViewPage() {
     )
   }
 
+  const ownerLabel = owner?.displayName || owner?.username
+  const ownerPath = owner?.username ? `/u/${owner.username}` : null
+
   return (
     <div className="shared-view">
       <header className="shared-top">
@@ -69,12 +84,20 @@ export function SharedViewPage() {
               {link.resourceType === 'binder'
                 ? 'Fichário compartilhado · somente leitura'
                 : 'Deck compartilhado · somente leitura'}
+              {ownerLabel ? ` · ${ownerLabel}` : ''}
             </p>
           </div>
         </div>
-        <Link to="/" className="btn primary shared-cta">
-          Criar o seu
-        </Link>
+        <div className="shared-top__actions">
+          {ownerPath && (
+            <Link to={ownerPath} className="btn ghost shared-cta">
+              Ver perfil
+            </Link>
+          )}
+          <Link to="/" className="btn primary shared-cta">
+            Criar o seu
+          </Link>
+        </div>
       </header>
 
       {link.resourceType === 'binder' ? (

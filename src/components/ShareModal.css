@@ -45,6 +45,21 @@
   line-height: 1.5;
 }
 
+.share-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.share-check input {
+  accent-color: var(--accent);
+}
+
 .share-result {
   display: flex;
   gap: 0.5rem;

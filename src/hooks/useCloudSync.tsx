@@ -16,6 +16,10 @@ const BINDERS_KEY = 'pokebinder-binders-v1'
 const INVENTORY_KEY = 'pokebinder-inventory-v1'
 const DECKS_KEY = 'pokebinder-decks-v1'
 
+function boundKey(userId: string) {
+  return `pokebinder-cloud-bound:${userId}`
+}
+
 type LocalSnapshot = {
   binders: Binder[]
   inventory: InventoryMap
@@ -30,6 +34,8 @@ type CloudSyncContextValue = {
   pauseCloudSave: () => void
   resumeCloudSave: () => void
   isCloudSavePaused: () => boolean
+  /** Reexecuta o sync com a nuvem (ex.: após erro). */
+  retrySync: () => void
 }
 
 const CloudSyncContext = createContext<CloudSyncContextValue | null>(null)
@@ -60,47 +66,12 @@ function hasLocalData(snapshot: LocalSnapshot) {
   )
 }
 
-function hasCloudData(snapshot: LocalSnapshot) {
-  return hasLocalData(snapshot)
-}
-
-type MergePromptProps = {
-  onUseCloud: () => void
-  onUploadLocal: () => void
-  onDismiss: () => void
-}
-
-function MergePrompt({ onUseCloud, onUploadLocal, onDismiss }: MergePromptProps) {
-  return (
-    <div className="cloud-merge-banner" role="status">
-      <div>
-        <strong>Dados locais e na nuvem encontrados.</strong>
-        <p>Escolha como sincronizar na primeira sessão com login.</p>
-      </div>
-      <div className="cloud-merge-actions">
-        <button type="button" className="btn ghost" onClick={onUseCloud}>
-          Usar nuvem
-        </button>
-        <button type="button" className="btn primary" onClick={onUploadLocal}>
-          Enviar local
-        </button>
-        <button type="button" className="btn ghost" onClick={onDismiss}>
-          Depois
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, loading: authLoading } = useAuth()
   const [cloudReady, setCloudReady] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [lastSyncError, setLastSyncError] = useState<string | null>(null)
-  const [mergePrompt, setMergePrompt] = useState<{
-    local: LocalSnapshot
-    cloud: LocalSnapshot
-  } | null>(null)
+  const [retryToken, setRetryToken] = useState(0)
 
   const pauseRef = useRef(false)
   const loadedForUser = useRef<string | null>(null)
@@ -114,6 +85,11 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const isCloudSavePaused = useCallback(() => pauseRef.current, [])
+
+  const retrySync = useCallback(() => {
+    loadedForUser.current = null
+    setRetryToken((t) => t + 1)
+  }, [])
 
   const applySnapshot = useCallback((snapshot: LocalSnapshot) => {
     pauseRef.current = true
@@ -132,7 +108,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     if (!isAuthenticated || !user) {
       loadedForUser.current = null
       setCloudReady(false)
-      setMergePrompt(null)
+      setLastSyncError(null)
       return
     }
 
@@ -155,16 +131,16 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
         }
 
         const localHas = hasLocalData(local)
-        const cloudHas = hasCloudData(cloudSnapshot)
+        const cloudHas = hasLocalData(cloudSnapshot)
 
-        if (localHas && cloudHas) {
-          setMergePrompt({ local, cloud: cloudSnapshot })
-        } else if (cloudHas) {
+        // Cloud is canonical when both exist. Local-only → seed cloud.
+        if (cloudHas) {
           applySnapshot(cloudSnapshot)
         } else if (localHas) {
           await uploadLocalData(user!.id, local)
         }
 
+        localStorage.setItem(boundKey(user!.id), new Date().toISOString())
         loadedForUser.current = user!.id
         setCloudReady(true)
       } catch (e) {
@@ -181,27 +157,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [authLoading, isAuthenticated, user, applySnapshot])
-
-  const handleUseCloud = useCallback(() => {
-    if (!mergePrompt) return
-    applySnapshot(mergePrompt.cloud)
-    setMergePrompt(null)
-  }, [mergePrompt, applySnapshot])
-
-  const handleUploadLocal = useCallback(async () => {
-    if (!mergePrompt || !user) return
-    setSyncing(true)
-    try {
-      await uploadLocalData(user.id, mergePrompt.local)
-      applySnapshot(mergePrompt.local)
-      setMergePrompt(null)
-    } catch (e) {
-      setLastSyncError(e instanceof Error ? e.message : 'Erro ao enviar dados locais.')
-    } finally {
-      setSyncing(false)
-    }
-  }, [mergePrompt, user, applySnapshot])
+  }, [authLoading, isAuthenticated, user, applySnapshot, retryToken])
 
   const value: CloudSyncContextValue = {
     cloudReady,
@@ -210,20 +166,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     pauseCloudSave,
     resumeCloudSave,
     isCloudSavePaused,
+    retrySync,
   }
 
-  return (
-    <CloudSyncContext.Provider value={value}>
-      {mergePrompt && (
-        <MergePrompt
-          onUseCloud={handleUseCloud}
-          onUploadLocal={() => void handleUploadLocal()}
-          onDismiss={() => setMergePrompt(null)}
-        />
-      )}
-      {children}
-    </CloudSyncContext.Provider>
-  )
+  return <CloudSyncContext.Provider value={value}>{children}</CloudSyncContext.Provider>
 }
 
 export function useCloudSync() {

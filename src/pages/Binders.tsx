@@ -1,18 +1,36 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { ShareModal } from '../components/ShareModal'
+import { useAuth } from '../hooks/useAuth'
 import { useBinders } from '../hooks/useBinders'
+import {
+  createSharedBinder,
+  listMySharedBinders,
+  type SharedBinderRow,
+} from '../lib/collabBinders'
+import {
+  initials,
+  listFollowing,
+  listMyPublished,
+  publishResourceToProfile,
+  unpublishResource,
+  type Profile,
+  type PublishedResource,
+} from '../lib/social'
 import type { Binder } from '../types'
 import './Binders.css'
+import './CollabBinder.css'
 
 type ModalState =
   | { mode: 'create-custom' }
   | { mode: 'create-wishlist' }
+  | { mode: 'create-shared' }
   | { mode: 'rename'; id: string; name: string }
   | null
 
 export function BindersPage() {
   const navigate = useNavigate()
+  const { user, isAuthenticated, requireAuth, openAuth } = useAuth()
   const {
     binders,
     createBinder,
@@ -24,6 +42,36 @@ export function BindersPage() {
   } = useBinders()
   const [modal, setModal] = useState<ModalState>(null)
   const [shareTarget, setShareTarget] = useState<Binder | null>(null)
+  const [published, setPublished] = useState<PublishedResource[]>([])
+  const [following, setFollowing] = useState<Profile[]>([])
+  const [sharedBinders, setSharedBinders] = useState<SharedBinderRow[]>([])
+  const [pubBusy, setPubBusy] = useState<string | null>(null)
+  const [collabBusy, setCollabBusy] = useState(false)
+
+  const refreshSocial = useCallback(async () => {
+    if (!user) {
+      setPublished([])
+      setFollowing([])
+      setSharedBinders([])
+      return
+    }
+    try {
+      const [pubs, friends, shared] = await Promise.all([
+        listMyPublished(user.id),
+        listFollowing(user.id),
+        listMySharedBinders(user.id),
+      ])
+      setPublished(pubs)
+      setFollowing(friends)
+      setSharedBinders(shared)
+    } catch {
+      /* social / collab tables may not exist yet */
+    }
+  }, [user])
+
+  useEffect(() => {
+    void refreshSocial()
+  }, [refreshSocial, isAuthenticated])
 
   function onPokedex() {
     const binder = ensurePokedex()
@@ -47,8 +95,43 @@ export function BindersPage() {
       navigate(`/binders/${binder.id}`)
       return
     }
+    if (modal.mode === 'create-shared') {
+      if (!requireAuth() || !user) return
+      setCollabBusy(true)
+      void createSharedBinder(user.id, trimmed)
+        .then((row) => {
+          setModal(null)
+          navigate(`/collab/${row.id}`)
+        })
+        .catch((e) => {
+          window.alert(e instanceof Error ? e.message : 'Erro ao criar fichário compartilhado.')
+        })
+        .finally(() => setCollabBusy(false))
+      return
+    }
     renameBinder(modal.id, trimmed)
     setModal(null)
+  }
+
+  function isPublished(binderId: string) {
+    return published.some((p) => p.resourceType === 'binder' && p.resourceId === binderId)
+  }
+
+  async function togglePublish(binder: Binder) {
+    if (!requireAuth() || !user) return
+    setPubBusy(binder.id)
+    try {
+      if (isPublished(binder.id)) {
+        await unpublishResource(user.id, 'binder', binder.id, false)
+      } else {
+        await publishResourceToProfile(user.id, 'binder', binder.id, binder.name, binder)
+      }
+      await refreshSocial()
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Erro ao publicar.')
+    } finally {
+      setPubBusy(null)
+    }
   }
 
   return (
@@ -68,7 +151,20 @@ export function BindersPage() {
           >
             Novo fichário
           </button>
-          <button type="button" className="btn accent" onClick={onPokedex}>
+          <button
+            type="button"
+            className="btn accent"
+            onClick={() => {
+              if (!isAuthenticated) {
+                openAuth('signin')
+                return
+              }
+              setModal({ mode: 'create-shared' })
+            }}
+          >
+            Novo compartilhado
+          </button>
+          <button type="button" className="btn ghost" onClick={onPokedex}>
             Abrir Pokédex
           </button>
           <button
@@ -81,8 +177,63 @@ export function BindersPage() {
         </div>
       </header>
 
+      {isAuthenticated && following.length > 0 && (
+        <section className="following-strip" aria-label="Seguindo">
+          <div className="following-strip__head">
+            <h2>Seguindo</h2>
+            <Link to="/amigos">Ver todos</Link>
+          </div>
+          <div className="following-strip__row">
+            {following.slice(0, 12).map((p) => (
+              <Link
+                key={p.id}
+                to={p.username ? `/u/${p.username}` : '/amigos'}
+                className="following-chip"
+              >
+                <span className="following-chip__av" aria-hidden>
+                  {initials(p)}
+                </span>
+                <span>{p.displayName || p.username}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isAuthenticated && (
+        <section aria-label="Fichários compartilhados">
+          <div className="following-strip__head">
+            <h2>Compartilhados comigo</h2>
+          </div>
+          {sharedBinders.length === 0 ? (
+            <p className="empty">
+              Nenhum fichário colaborativo ainda. Crie um ou aceite um link de convite.
+            </p>
+          ) : (
+            <div className="collab-list">
+              {sharedBinders.map((s) => (
+                <article key={s.id} className="collab-card">
+                  <button
+                    type="button"
+                    className="open"
+                    onClick={() => navigate(`/collab/${s.id}`)}
+                  >
+                    <span className="kind">Ao vivo</span>
+                    <h2>{s.name}</h2>
+                    <p>
+                      {s.grid} · rev {s.revision}
+                      {s.ownerId === user?.id ? ' · você é dono' : ''}
+                    </p>
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {binders.length === 0 ? (
-        <p className="empty">Nenhum fichário ainda. Crie um ou abra a Pokédex.</p>
+        <p className="empty">Nenhum fichário pessoal ainda. Crie um ou abra a Pokédex.</p>
       ) : (
         <div className="binder-list">
           {binders.map((b) => {
@@ -95,6 +246,7 @@ export function BindersPage() {
                 : prog.slots
                   ? Math.round((prog.filled / prog.slots) * 100)
                   : 0
+            const publishedOnProfile = isPublished(b.id)
             return (
               <article key={b.id} className="binder-card">
                 <button
@@ -112,6 +264,7 @@ export function BindersPage() {
                   <h2>{b.name}</h2>
                   <p>
                     {b.grid} · {b.pages.length} páginas
+                    {publishedOnProfile ? ' · No perfil' : ''}
                   </p>
                   <div className="bar">
                     <i style={{ width: `${pct}%` }} />
@@ -123,12 +276,20 @@ export function BindersPage() {
                   </span>
                 </button>
                 <div className="card-actions">
+                  <button type="button" className="rename" onClick={() => setShareTarget(b)}>
+                    Compartilhar
+                  </button>
                   <button
                     type="button"
                     className="rename"
-                    onClick={() => setShareTarget(b)}
+                    disabled={pubBusy === b.id}
+                    onClick={() => void togglePublish(b)}
                   >
-                    Compartilhar
+                    {pubBusy === b.id
+                      ? '…'
+                      : publishedOnProfile
+                        ? 'Despublicar'
+                        : 'Publicar no perfil'}
                   </button>
                   <button
                     type="button"
@@ -162,16 +323,22 @@ export function BindersPage() {
               ? 'Novo fichário'
               : modal.mode === 'create-wishlist'
                 ? 'Nova Pokédex desejada'
-                : 'Renomear fichário'
+                : modal.mode === 'create-shared'
+                  ? 'Novo fichário compartilhado'
+                  : 'Renomear fichário'
           }
           initial={
             modal.mode === 'rename'
               ? modal.name
               : modal.mode === 'create-wishlist'
                 ? 'Pokédex desejada'
-                : 'Meu fichário'
+                : modal.mode === 'create-shared'
+                  ? 'Fichário com amigos'
+                  : 'Meu fichário'
           }
-          confirmLabel={modal.mode === 'rename' ? 'Salvar' : 'Criar'}
+          confirmLabel={
+            modal.mode === 'rename' ? 'Salvar' : collabBusy ? 'Criando…' : 'Criar'
+          }
           onClose={() => setModal(null)}
           onSubmit={submitModal}
         />
@@ -184,6 +351,7 @@ export function BindersPage() {
         resourceId={shareTarget?.id ?? ''}
         title={shareTarget?.name ?? ''}
         snapshot={shareTarget}
+        onPublished={() => void refreshSocial()}
       />
     </div>
   )

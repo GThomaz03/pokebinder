@@ -4,7 +4,9 @@ import {
   shareUrl,
   type ShareResourceType,
 } from '../lib/cloudStorage'
+import { publishResourceToProfile } from '../lib/social'
 import { useAuth } from '../hooks/useAuth'
+import type { Binder, Deck } from '../types'
 import './ShareModal.css'
 
 type ShareModalProps = {
@@ -14,6 +16,7 @@ type ShareModalProps = {
   resourceId: string
   title: string
   snapshot: unknown
+  onPublished?: () => void
 }
 
 export function ShareModal({
@@ -23,12 +26,14 @@ export function ShareModal({
   resourceId,
   title,
   snapshot,
+  onPublished,
 }: ShareModalProps) {
   const { user, requireAuth } = useAuth()
   const [link, setLink] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [alsoPublish, setAlsoPublish] = useState(true)
 
   useEffect(() => {
     if (!open) {
@@ -36,6 +41,7 @@ export function ShareModal({
       setError(null)
       setBusy(false)
       setCopied(false)
+      setAlsoPublish(true)
     }
   }, [open])
 
@@ -46,14 +52,26 @@ export function ShareModal({
     setBusy(true)
     setError(null)
     try {
-      const share = await createShareLink(
-        user.id,
-        resourceType,
-        resourceId,
-        title,
-        snapshot as never,
-      )
-      setLink(shareUrl(share.token))
+      if (alsoPublish) {
+        const pub = await publishResourceToProfile(
+          user.id,
+          resourceType,
+          resourceId,
+          title,
+          snapshot as Binder | Deck,
+        )
+        setLink(shareUrl(pub.shareToken))
+        onPublished?.()
+      } else {
+        const share = await createShareLink(
+          user.id,
+          resourceType,
+          resourceId,
+          title,
+          snapshot as Binder | Deck,
+        )
+        setLink(shareUrl(share.token))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao criar link.')
     } finally {
@@ -87,14 +105,25 @@ export function ShareModal({
           poderá visualizar, mas não editar.
         </p>
 
+        {!link && (
+          <label className="share-check">
+            <input
+              type="checkbox"
+              checked={alsoPublish}
+              onChange={(e) => setAlsoPublish(e.target.checked)}
+            />
+            Também publicar no meu perfil
+          </label>
+        )}
+
         {!link ? (
-          <button type="button" className="btn primary" onClick={generate} disabled={busy}>
+          <button type="button" className="btn primary" onClick={() => void generate()} disabled={busy}>
             {busy ? 'Gerando…' : 'Gerar link de compartilhamento'}
           </button>
         ) : (
           <div className="share-result">
             <input type="text" readOnly value={link} aria-label="Link de compartilhamento" />
-            <button type="button" className="btn accent" onClick={copy}>
+            <button type="button" className="btn accent" onClick={() => void copy()}>
               {copied ? 'Copiado!' : 'Copiar'}
             </button>
           </div>
