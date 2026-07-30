@@ -1,5 +1,5 @@
 import type { CachedCard, CardPrice, PriceMarket } from '../types'
-import { baseCardId, cardImageUrl, extractPrice, getCard, parseOwnedKey } from './tcgdex'
+import { baseCardId, cardImageUrl, extractPrice, getCard, getClient, parseOwnedKey } from './tcgdex'
 import type { CardLang } from '../types'
 import { getFxRates, toBrl } from './fx'
 
@@ -58,17 +58,30 @@ export async function hydrateCard(
     const card = await getCard(fetchLang, cardId)
     if (!card) return existing ?? null
     const price = extractPrice(card as Parameters<typeof extractPrice>[0])
+
+    // Prefer EN art when the active locale returns a card without `image`.
+    let image = cardImageUrl(card.image, 'high')
+    if (!image && fetchLang !== 'en') {
+      try {
+        const enOnly = await getClient('en').card.get(cardId)
+        image = cardImageUrl(enOnly?.image, 'high')
+      } catch {
+        /* keep falling through */
+      }
+    }
+    if (!image) image = existing?.image
+
     const cached: CachedCard = {
       id: card.id,
-      name: card.name,
-      localId: String(card.localId),
-      image: cardImageUrl(card.image, 'high'),
-      setName: card.set?.name,
-      setId: card.set?.id,
-      illustrator: (card as { illustrator?: string }).illustrator,
-      rarity: (card as { rarity?: string }).rarity,
-      types: (card as { types?: string[] }).types,
-      dexId: card.dexId,
+      name: card.name || existing?.name || cardId,
+      localId: String(card.localId ?? existing?.localId ?? ''),
+      image,
+      setName: card.set?.name ?? existing?.setName,
+      setId: card.set?.id ?? existing?.setId,
+      illustrator: (card as { illustrator?: string }).illustrator ?? existing?.illustrator,
+      rarity: (card as { rarity?: string }).rarity ?? existing?.rarity,
+      types: (card as { types?: string[] }).types ?? existing?.types,
+      dexId: card.dexId ?? existing?.dexId,
       price,
     }
     cardCache = { ...cardCache, [cardId]: cached }

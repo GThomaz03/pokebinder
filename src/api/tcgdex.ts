@@ -118,9 +118,39 @@ function detectBasicEnergyTypeKey(name?: string, energyType?: string): string | 
   return null
 }
 
+/** Series folder in assets.tcgdex.net paths (`sv03.5` → `sv`, `swsh12.5` → `swsh`). */
+function seriesFromSetId(setId: string): string | undefined {
+  const m = /^([a-z]+)/i.exec(setId)
+  return m?.[1]?.toLowerCase()
+}
+
+/**
+ * Map TCGdex set ids to PokémonTCG.io ids (`sv03.5` → `sv3pt5`, `swsh12.5` → `swsh12pt5`).
+ */
+export function toPokemonTcgIoSetId(setId: string): string {
+  if (!setId.includes('.')) return setId
+  return setId.replace(/0+(\d)/g, '$1').replace(/\./g, 'pt')
+}
+
+/** Build TCGdex asset base from a card id when the API omits `image`. */
+export function inferTcgdexImageBase(
+  cardId: string,
+  lang: CardLang = 'en',
+  localId?: string | number,
+): string | undefined {
+  const id = baseCardId(cardId)
+  const dash = id.indexOf('-')
+  if (dash <= 0) return undefined
+  const setId = id.slice(0, dash)
+  const lid = String(localId ?? id.slice(dash + 1))
+  const series = seriesFromSetId(setId)
+  if (!series || !lid) return undefined
+  return `https://assets.tcgdex.net/${lang}/${series}/${setId}/${lid}`
+}
+
 /**
  * Extra image URLs when TCGdex has no `image` (very common for basic Energy).
- * Uses PokémonTCG.io set prints + sve basic-energy stand-ins.
+ * Tries reconstructed TCGdex asset paths first, then PokémonTCG.io (+ set-id aliases).
  */
 export function inferMissingImageCandidates(opts: {
   cardId: string
@@ -131,13 +161,33 @@ export function inferMissingImageCandidates(opts: {
   const urls: string[] = []
   const id = baseCardId(opts.cardId)
   const dash = id.indexOf('-')
+  const raw = dash > 0 ? String(opts.localId ?? id.slice(dash + 1)) : String(opts.localId ?? '')
+  const stripped = raw.replace(/^0+/, '') || (raw ? '0' : '')
+  const localIds = [...new Set([raw, stripped].filter(Boolean))]
+
+  for (const lang of ['en', 'pt'] as const) {
+    for (const lid of localIds.length ? localIds : ['']) {
+      const base = inferTcgdexImageBase(id, lang, lid || undefined)
+      if (!base) continue
+      for (const u of cardImageCandidates(base, 'high')) {
+        if (!urls.includes(u)) urls.push(u)
+      }
+      for (const u of cardImageCandidates(base, 'low')) {
+        if (!urls.includes(u)) urls.push(u)
+      }
+    }
+  }
+
   if (dash > 0) {
     const setId = id.slice(0, dash)
-    const raw = String(opts.localId ?? id.slice(dash + 1))
-    const stripped = raw.replace(/^0+/, '') || '0'
-    for (const n of [...new Set([stripped, raw])]) {
-      urls.push(`https://images.pokemontcg.io/${setId}/${n}.png`)
-      urls.push(`https://images.pokemontcg.io/${setId}/${n}_hires.png`)
+    const ioSets = [...new Set([setId, toPokemonTcgIoSetId(setId)])]
+    for (const ioSet of ioSets) {
+      for (const n of localIds) {
+        const png = `https://images.pokemontcg.io/${ioSet}/${n}.png`
+        const hires = `https://images.pokemontcg.io/${ioSet}/${n}_hires.png`
+        if (!urls.includes(png)) urls.push(png)
+        if (!urls.includes(hires)) urls.push(hires)
+      }
     }
   }
 
@@ -145,8 +195,10 @@ export function inferMissingImageCandidates(opts: {
   if (typeKey) {
     const n = BASIC_ENERGY_SVE_INDEX[typeKey]
     if (n) {
-      urls.push(`https://images.pokemontcg.io/sve/${n}.png`)
-      urls.push(`https://images.pokemontcg.io/sve/${n}_hires.png`)
+      const png = `https://images.pokemontcg.io/sve/${n}.png`
+      const hires = `https://images.pokemontcg.io/sve/${n}_hires.png`
+      if (!urls.includes(png)) urls.push(png)
+      if (!urls.includes(hires)) urls.push(hires)
     }
   }
 

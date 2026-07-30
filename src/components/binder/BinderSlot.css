@@ -160,12 +160,17 @@
   filter: grayscale(0.7) brightness(0.65);
 }
 
-.b-slot-frame img {
+.b-slot-frame img,
+.b-slot-frame .ph {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
   pointer-events: none;
+}
+
+.b-slot-frame .ph {
+  background: var(--slot);
 }
 
 .empty-mark {

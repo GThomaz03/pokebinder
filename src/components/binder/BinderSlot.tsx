@@ -195,9 +195,13 @@ export function BinderSlot({
             src={cached?.image}
             alt={cached?.name || ''}
             quality="high"
+            loading="eager"
             cardId={cardId}
             cardName={cached?.name}
-            localId={cached?.localId}
+            localId={
+              cached?.localId ||
+              (cardId?.includes('-') ? cardId.slice(cardId.indexOf('-') + 1) : undefined)
+            }
             draggable={false}
           />
         ) : showBack ? (

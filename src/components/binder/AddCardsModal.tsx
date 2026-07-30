@@ -84,6 +84,7 @@ export function AddCardsModal({
     try {
       const data = (await searchCards(nextLang, q)) as Brief[]
       if (id !== reqId.current) return
+      for (const card of data) seedCardBrief(card)
       setResults(data)
       lastSearch = { lang: nextLang, query: q, results: data }
     } catch {
