@@ -163,15 +163,13 @@ function SharedBinderView({ binder }: { binder: Binder }) {
   const safeStepIndex = Math.min(Math.floor(pageIndex / step), totalSteps - 1)
   const leftIndex = safeStepIndex * step
   const rightIndex = singlePage ? -1 : leftIndex + 1
-  const leftPage = pages[leftIndex]
-  const rightPage = !singlePage ? pages[rightIndex] ?? null : null
   const cols = gridCols(binder.grid)
   const rows = gridRows(binder.grid)
   const aspect = pageGridAspect(binder.grid)
   const canPrev = leftIndex > 0
   const canNext = leftIndex + step < pages.length
   const pageLabel =
-    !singlePage && rightPage
+    !singlePage && rightIndex < pages.length
       ? `${leftIndex + 1}–${leftIndex + 2}`
       : `${leftIndex + 1}`
 
