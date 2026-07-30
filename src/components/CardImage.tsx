@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  clearCachedImageUrl,
   getCachedImageUrl,
   imageCacheKey,
   setCachedImageUrl,
@@ -61,6 +62,15 @@ function buildCandidates(
   return urls
 }
 
+function normalizeImgSrc(url: string): string {
+  try {
+    return new URL(url, typeof window !== 'undefined' ? window.location.href : 'https://local')
+      .href
+  } catch {
+    return url
+  }
+}
+
 /**
  * Card art with locale → English fallback, plus PokémonTCG.io / basic-energy
  * stand-ins when TCGdex omits `image` (common for Energy cards).
@@ -90,26 +100,31 @@ export function CardImage({
       energyType,
     })
     const hit = getCachedImageUrl(cacheKey)
-    if (!hit) return list
-    if (list.includes(hit)) return [hit, ...list.filter((u) => u !== hit)]
-    return [hit, ...list]
+    // Only prefer a remembered URL if it is still one of our candidates.
+    // Foreign/stale hits (e.g. old 404 paths) must not jump the queue.
+    if (hit && list.includes(hit)) return [hit, ...list.filter((u) => u !== hit)]
+    if (hit && !list.includes(hit)) clearCachedImageUrl(cacheKey, hit)
+    return list
   }, [src, quality, cardId, localId, cardName, energyType, cacheKey])
 
   const [index, setIndex] = useState(0)
+  const [exhausted, setExhausted] = useState(false)
 
-  // Keep dep array size/order stable (avoids React warning across HMR / prop shapes).
   useEffect(() => {
     setIndex(0)
-  }, [srcKey, quality, cardKey])
+    setExhausted(false)
+  }, [srcKey, quality, cardKey, cacheKey])
 
   const current = candidates[index]
 
-  if (!current) {
+  if (!current || exhausted) {
     return <span className={className ? `${className} ph` : 'ph'} aria-hidden />
   }
 
   return (
     <img
+      // Remount per URL so an aborted previous load cannot fire onError on the next candidate.
+      key={current}
       className={className}
       src={current}
       alt={alt}
@@ -118,8 +133,15 @@ export function CardImage({
       onLoad={() => {
         setCachedImageUrl(cacheKey, current)
       }}
-      onError={() => {
-        setIndex((i) => (i + 1 < candidates.length ? i + 1 : i))
+      onError={(e) => {
+        const failed = normalizeImgSrc((e.currentTarget as HTMLImageElement).src)
+        const expected = normalizeImgSrc(current)
+        // Ignore stale/aborted errors that don't match the URL we intended to show.
+        if (failed !== expected) return
+
+        clearCachedImageUrl(cacheKey, current)
+        if (index + 1 < candidates.length) setIndex(index + 1)
+        else setExhausted(true)
       }}
     />
   )

@@ -8,7 +8,25 @@ function load(): ImageUrlMap {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return {}
-    return (JSON.parse(raw) as ImageUrlMap) ?? {}
+    const parsed = (JSON.parse(raw) as ImageUrlMap) ?? {}
+    // Drop remembered PokémonTCG.io URLs that used raw TCGdex set ids (e.g. sv03.5 → 404).
+    let changed = false
+    const next: ImageUrlMap = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'string' && /images\.pokemontcg\.io\/[^/]*\d\.\d\//.test(v)) {
+        changed = true
+        continue
+      }
+      next[k] = v
+    }
+    if (changed) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+    }
+    return next
   } catch {
     return {}
   }
@@ -47,5 +65,17 @@ export function setCachedImageUrl(key: string, url: string) {
   if (!key || !url) return
   if (cache[key] === url) return
   cache = { ...cache, [key]: url }
+  persistSoon()
+}
+
+/** Drop a remembered URL after it 404s / fails to decode. */
+export function clearCachedImageUrl(key: string, url?: string) {
+  if (!key) return
+  const current = cache[key]
+  if (!current) return
+  if (url && current !== url) return
+  const next = { ...cache }
+  delete next[key]
+  cache = next
   persistSoon()
 }

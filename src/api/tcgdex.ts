@@ -180,14 +180,13 @@ export function inferMissingImageCandidates(opts: {
 
   if (dash > 0) {
     const setId = id.slice(0, dash)
-    const ioSets = [...new Set([setId, toPokemonTcgIoSetId(setId)])]
-    for (const ioSet of ioSets) {
-      for (const n of localIds) {
-        const png = `https://images.pokemontcg.io/${ioSet}/${n}.png`
-        const hires = `https://images.pokemontcg.io/${ioSet}/${n}_hires.png`
-        if (!urls.includes(png)) urls.push(png)
-        if (!urls.includes(hires)) urls.push(hires)
-      }
+    // Only PokémonTCG.io ids (sv03.5 → sv3pt5). Raw TCGdex ids 404.
+    const ioSet = toPokemonTcgIoSetId(setId)
+    for (const n of localIds) {
+      const png = `https://images.pokemontcg.io/${ioSet}/${n}.png`
+      const hires = `https://images.pokemontcg.io/${ioSet}/${n}_hires.png`
+      if (!urls.includes(png)) urls.push(png)
+      if (!urls.includes(hires)) urls.push(hires)
     }
   }
 

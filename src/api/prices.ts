@@ -49,6 +49,7 @@ export async function hydrateCard(
   const existing = cardCache[cardId]
   const stale =
     !existing ||
+    !existing.image ||
     force ||
     Date.now() - (existing.price.updated || 0) > 1000 * 60 * 60 * 24
 
