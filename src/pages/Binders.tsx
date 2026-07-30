@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ShareModal } from '../components/ShareModal'
 import { useBinders } from '../hooks/useBinders'
+import type { Binder } from '../types'
 import './Binders.css'
 
 type ModalState =
@@ -21,6 +23,7 @@ export function BindersPage() {
     progress,
   } = useBinders()
   const [modal, setModal] = useState<ModalState>(null)
+  const [shareTarget, setShareTarget] = useState<Binder | null>(null)
 
   function onPokedex() {
     const binder = ensurePokedex()
@@ -123,6 +126,13 @@ export function BindersPage() {
                   <button
                     type="button"
                     className="rename"
+                    onClick={() => setShareTarget(b)}
+                  >
+                    Compartilhar
+                  </button>
+                  <button
+                    type="button"
+                    className="rename"
                     onClick={() => setModal({ mode: 'rename', id: b.id, name: b.name })}
                   >
                     Renomear
@@ -166,6 +176,15 @@ export function BindersPage() {
           onSubmit={submitModal}
         />
       )}
+
+      <ShareModal
+        open={Boolean(shareTarget)}
+        onClose={() => setShareTarget(null)}
+        resourceType="binder"
+        resourceId={shareTarget?.id ?? ''}
+        title={shareTarget?.name ?? ''}
+        snapshot={shareTarget}
+      />
     </div>
   )
 }

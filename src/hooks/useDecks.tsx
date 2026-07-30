@@ -15,6 +15,10 @@ import {
   type DeckValidation,
 } from '../lib/deckRules'
 import type { Deck, DeckEntry } from '../types'
+import { saveUserDecks } from '../lib/cloudStorage'
+import { useDebouncedEffect } from '../lib/useDebouncedEffect'
+import { useAuth } from './useAuth'
+import { useCloudSync } from './useCloudSync'
 import { useInventory } from './useInventory'
 
 const STORAGE_KEY = 'pokebinder-decks-v1'
@@ -53,10 +57,25 @@ function touch(deck: Deck): Deck {
 export function DecksProvider({ children }: { children: ReactNode }) {
   const [decks, setDecks] = useState<Deck[]>(load)
   const { getQty } = useInventory()
+  const { user, isAuthenticated } = useAuth()
+  const { cloudReady, isCloudSavePaused } = useCloudSync()
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ decks }))
   }, [decks])
+
+  useEffect(() => {
+    function onReload() {
+      setDecks(load())
+    }
+    window.addEventListener('pokebinder:cloud-reload', onReload)
+    return () => window.removeEventListener('pokebinder:cloud-reload', onReload)
+  }, [])
+
+  useDebouncedEffect(() => {
+    if (!isAuthenticated || !user || !cloudReady || isCloudSavePaused()) return
+    void saveUserDecks(user.id, decks).catch(() => {})
+  }, [decks, isAuthenticated, user?.id, cloudReady], 1500)
 
   const update = useCallback((id: string, fn: (d: Deck) => Deck) => {
     setDecks((prev) => prev.map((d) => (d.id === id ? touch(fn(d)) : d)))

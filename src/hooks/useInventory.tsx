@@ -9,6 +9,10 @@ import {
 } from 'react'
 import { baseCardId } from '../api/tcgdex'
 import type { InventoryMap } from '../types'
+import { saveUserInventory } from '../lib/cloudStorage'
+import { useDebouncedEffect } from '../lib/useDebouncedEffect'
+import { useAuth } from './useAuth'
+import { useCloudSync } from './useCloudSync'
 
 const STORAGE_KEY = 'pokebinder-inventory-v1'
 
@@ -39,10 +43,25 @@ function load(): InventoryMap {
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [inventory, setInventory] = useState<InventoryMap>(load)
+  const { user, isAuthenticated } = useAuth()
+  const { cloudReady, isCloudSavePaused } = useCloudSync()
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(inventory))
   }, [inventory])
+
+  useEffect(() => {
+    function onReload() {
+      setInventory(load())
+    }
+    window.addEventListener('pokebinder:cloud-reload', onReload)
+    return () => window.removeEventListener('pokebinder:cloud-reload', onReload)
+  }, [])
+
+  useDebouncedEffect(() => {
+    if (!isAuthenticated || !user || !cloudReady || isCloudSavePaused()) return
+    void saveUserInventory(user.id, inventory).catch(() => {})
+  }, [inventory, isAuthenticated, user?.id, cloudReady], 1500)
 
   const getQty = useCallback(
     (cardKey: string) => {

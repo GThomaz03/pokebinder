@@ -28,6 +28,10 @@ import {
   rebuildPagesForGrid,
   swapSlots,
 } from '../lib/binderUtils'
+import { saveUserBinders } from '../lib/cloudStorage'
+import { useDebouncedEffect } from '../lib/useDebouncedEffect'
+import { useAuth } from './useAuth'
+import { useCloudSync } from './useCloudSync'
 
 const STORAGE_KEY = 'pokebinder-binders-v1'
 
@@ -84,10 +88,27 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const [binders, setBinders] = useState<Binder[]>(load)
   const bindersRef = useRef(binders)
   bindersRef.current = binders
+  const { user, isAuthenticated } = useAuth()
+  const { cloudReady, isCloudSavePaused } = useCloudSync()
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ binders }))
   }, [binders])
+
+  useEffect(() => {
+    function onReload() {
+      setBinders(load())
+    }
+    window.addEventListener('pokebinder:cloud-reload', onReload)
+    return () => window.removeEventListener('pokebinder:cloud-reload', onReload)
+  }, [])
+
+  useDebouncedEffect(() => {
+    if (!isAuthenticated || !user || !cloudReady || isCloudSavePaused()) return
+    void saveUserBinders(user.id, binders).catch(() => {
+      /* erros de sync são tratados no CloudSyncProvider em fluxos explícitos */
+    })
+  }, [binders, isAuthenticated, user?.id, cloudReady], 1500)
 
   const update = useCallback((id: string, fn: (b: Binder) => Binder) => {
     setBinders((prev) => {

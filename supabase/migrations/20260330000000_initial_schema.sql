@@ -65,6 +65,11 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- Trigger só deve rodar via auth; não expor via RPC
+revoke execute on function public.handle_new_user() from public;
+revoke execute on function public.handle_new_user() from anon;
+revoke execute on function public.handle_new_user() from authenticated;
+
 -- RLS
 alter table public.profiles enable row level security;
 alter table public.user_binders enable row level security;

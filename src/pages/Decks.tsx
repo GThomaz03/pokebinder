@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ShareModal } from '../components/ShareModal'
 import { useDecks } from '../hooks/useDecks'
 import { useInventory } from '../hooks/useInventory'
 import { deckTotal, validateDeck } from '../lib/deckRules'
+import type { Deck } from '../types'
 import './Decks.css'
 
 type ModalState =
@@ -15,6 +17,7 @@ export function DecksPage() {
   const { decks, createDeck, renameDeck, deleteDeck } = useDecks()
   const { getQty } = useInventory()
   const [modal, setModal] = useState<ModalState>(null)
+  const [shareTarget, setShareTarget] = useState<Deck | null>(null)
 
   function submit(name: string) {
     if (!modal) return
@@ -106,6 +109,9 @@ export function DecksPage() {
                   </div>
                 </button>
                 <div className="deck-card-actions">
+                  <button type="button" onClick={() => setShareTarget(deck)}>
+                    Compartilhar
+                  </button>
                   <button
                     type="button"
                     onClick={() => setModal({ mode: 'rename', id: deck.id, name: deck.name })}
@@ -137,6 +143,15 @@ export function DecksPage() {
           onSubmit={submit}
         />
       )}
+
+      <ShareModal
+        open={Boolean(shareTarget)}
+        onClose={() => setShareTarget(null)}
+        resourceType="deck"
+        resourceId={shareTarget?.id ?? ''}
+        title={shareTarget?.name ?? ''}
+        snapshot={shareTarget}
+      />
     </div>
   )
 }

@@ -66,6 +66,13 @@
   border-color: var(--accent);
 }
 
+.topbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-left: auto;
+}
+
 .lang-select select {
   appearance: none;
   background: var(--surface);
@@ -81,6 +88,36 @@
 .lang-select select:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.cloud-hint {
+  padding: 0.55rem 1.25rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
 }
 
 .main {
@@ -113,6 +150,11 @@
   overflow: hidden;
 }
 
+.app-shell:has(.binder-view) .cloud-hint,
+.app-shell:has(.deck-builder) .cloud-hint {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .topbar {
     flex-wrap: wrap;
@@ -123,5 +165,14 @@
     width: 100%;
     margin: 0;
     justify-content: center;
+  }
+
+  .topbar-end {
+    margin-left: 0;
+  }
+
+  .cloud-hint {
+    padding-inline: 0.85rem;
+    font-size: 0.78rem;
   }
 }
