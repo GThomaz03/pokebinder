@@ -62,26 +62,62 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
   }
 
   const body = (
-    <>
-        <section>
-          <h3>Nome</h3>
-          <label className="field">
-            Nome do fichário
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.currentTarget.blur()
-                }
-              }}
-            />
-          </label>
-        </section>
+    <div className="settings-body">
+      <section className="settings-block settings-block--progress">
+        <div className="settings-block-head">
+          <h3>Progresso</h3>
+          <em className="settings-pct">{isSpeciesBinder ? `${speciesPct}%` : `${cardsPct}%`}</em>
+        </div>
+        {isSpeciesBinder ? (
+          <>
+            <div className="meter">
+              <span>
+                {prog.owned} / {prog.total} espécies
+              </span>
+              <div className="bar">
+                <i style={{ width: `${speciesPct}%` }} />
+              </div>
+            </div>
+            {binder.kind === 'pokedex' && !adapters && (
+              <div className="settings-inline-action">
+                <span>Marcar tudo como faltando</span>
+                <button type="button" className="btn-soft" onClick={() => setAllMissing()}>
+                  Resetar
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="meter">
+            <span>
+              {prog.filled} / {prog.slots} slots
+            </span>
+            <div className="bar">
+              <i style={{ width: `${cardsPct}%` }} />
+            </div>
+          </div>
+        )}
+      </section>
 
-        <section>
-          <h3>Tamanho da grade</h3>
+      <section className="settings-block">
+        <h3>Nome</h3>
+        <label className="field">
+          <span className="field-label">Nome do fichário</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+            }}
+          />
+        </label>
+      </section>
+
+      <section className="settings-block">
+        <h3>Estrutura</h3>
+        <div className="settings-sub">
+          <span className="settings-sub-label">Tamanho da grade</span>
           <div className="grid-choices">
             {GRID_OPTIONS.map((g) => (
               <button
@@ -94,116 +130,82 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
               </button>
             ))}
           </div>
-        </section>
-
-        <section>
-          <h3>Progresso da coleção</h3>
-          {isSpeciesBinder ? (
-            <>
-              <div className="meter">
-                <span>
-                  {prog.owned} / {prog.total} espécies
-                </span>
-                <div className="bar">
-                  <i style={{ width: `${speciesPct}%` }} />
-                </div>
-                <em>{speciesPct}%</em>
-              </div>
-              {binder.kind === 'pokedex' && !adapters && (
-                <label className="toggle">
-                  <span>Marcar tudo como faltando</span>
-                  <button
-                    type="button"
-                    className="btn-soft"
-                    onClick={() => setAllMissing()}
-                  >
-                    Resetar
-                  </button>
-                </label>
-              )}
-            </>
-          ) : (
-            <div className="meter">
-              <span>
-                {prog.filled} / {prog.slots}
-              </span>
-              <div className="bar">
-                <i style={{ width: `${cardsPct}%` }} />
-              </div>
-              <em>{cardsPct}%</em>
-            </div>
+        </div>
+        <div className="settings-sub settings-sub--row">
+          <div>
+            <span className="settings-sub-label">Páginas</span>
+            <p className="muted">
+              {pageCount} {pageCount === 1 ? 'página' : 'páginas'}
+              {!isSpeciesBinder && ` · ${prog.filled}/${prog.slots} preenchidos`}
+            </p>
+          </div>
+          {binder.kind === 'custom' && (
+            <button type="button" className="btn-soft" onClick={() => addPages(2)}>
+              + 2 páginas
+            </button>
           )}
-        </section>
+        </div>
+      </section>
 
-        <section>
-          <h3>Verso das cartas</h3>
+      <section className="settings-block">
+        <h3>Aparência</h3>
+        <div className="toggle-list">
           <Toggle
             label="Slots vazios como verso"
+            hint="Mostra o verso da carta nos espaços vazios"
             checked={binder.settings.emptyAsCardBack}
             onChange={(v) => updateSettings({ emptyAsCardBack: v })}
           />
           <Toggle
             label="Faltantes como verso"
+            hint="Espécies faltantes usam o verso em vez de esmaecer"
             checked={binder.settings.missingAsCardBack}
             onChange={(v) => updateSettings({ missingAsCardBack: v })}
           />
-        </section>
-
-        <section>
-          <h3>Preços (em R$)</h3>
-          <Toggle
-            label="Mostrar preço em reais"
-            checked={binder.settings.showPrices}
-            onChange={(v) => updateSettings({ showPrices: v })}
-          />
-          <label className="field">
-            Fonte convertida para BRL
-            <select
-              value={binder.settings.priceMarket}
-              onChange={(e) =>
-                updateSettings({
-                  priceMarket: e.target.value as 'cardmarket' | 'tcgplayer',
-                })
-              }
-            >
-              <option value="cardmarket">Cardmarket → R$</option>
-              <option value="tcgplayer">TCGPlayer → R$</option>
-            </select>
-          </label>
-        </section>
-
-        <section>
-          <h3>Visibilidade</h3>
           {binder.kind === 'repository' ? (
             <Toggle
               label="Mostrar cartas repetidas"
+              hint="Inclui cópias extras no repositório"
               checked={Boolean(binder.settings.showDuplicates)}
               onChange={(v) => updateSettings({ showDuplicates: v })}
             />
           ) : (
             <Toggle
               label="Ignorar efeito de faltante"
+              hint="Cartas faltantes ficam com opacidade normal"
               checked={!binder.settings.dimMissing}
               onChange={(v) => updateSettings({ dimMissing: !v })}
             />
           )}
-        </section>
+        </div>
+      </section>
 
-        <section>
-          <h3>Páginas</h3>
-          <p className="muted">
-            {pageCount} páginas
-            {!isSpeciesBinder && ` · ${prog.filled}/${prog.slots} slots`}
-          </p>
-          {binder.kind === 'custom' && (
-            <div className="page-stepper">
-              <button type="button" className="btn-soft" onClick={() => addPages(2)}>
-                + 2 páginas
-              </button>
-            </div>
-          )}
-        </section>
-    </>
+      <section className="settings-block">
+        <h3>Preços</h3>
+        <div className="toggle-list">
+          <Toggle
+            label="Mostrar preço em reais"
+            hint="Exibe o valor convertido sob as cartas"
+            checked={binder.settings.showPrices}
+            onChange={(v) => updateSettings({ showPrices: v })}
+          />
+        </div>
+        <label className="field">
+          <span className="field-label">Fonte convertida para BRL</span>
+          <select
+            value={binder.settings.priceMarket}
+            onChange={(e) =>
+              updateSettings({
+                priceMarket: e.target.value as 'cardmarket' | 'tcgplayer',
+              })
+            }
+          >
+            <option value="cardmarket">Cardmarket → R$</option>
+            <option value="tcgplayer">TCGPlayer → R$</option>
+          </select>
+        </label>
+      </section>
+    </div>
   )
 
   if (embedded) return <div className="settings-embedded">{body}</div>
@@ -231,21 +233,26 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
 
 function Toggle({
   label,
+  hint,
   checked,
   onChange,
 }: {
   label: string
+  hint?: string
   checked: boolean
   onChange: (v: boolean) => void
 }) {
   return (
     <label className="toggle">
-      <span>{label}</span>
+      <span className="toggle-copy">
+        <span className="toggle-label">{label}</span>
+        {hint && <span className="toggle-hint">{hint}</span>}
+      </span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        className={`switch ${checked ? 'on' : ''}`}
+        className={`switch${checked ? ' on' : ''}`}
         onClick={() => onChange(!checked)}
       >
         <i />

@@ -341,9 +341,15 @@ export function BinderViewPage() {
       data-binder-theme="mesa"
     >
       <div className="view-top">
-        <Link to="/" className="back">
-          ← Fichários
-        </Link>
+        <button
+          type="button"
+          className="btn-ghost binder-home"
+          disabled={!canPrevPage}
+          onClick={() => setSpreadIndex(0)}
+          title="Ir para o início do fichário"
+        >
+          ← Início
+        </button>
         <h1>{binder.name}</h1>
         <div className="view-actions">
           <span className="kind-pill">{kindLabel}</span>

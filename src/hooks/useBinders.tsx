@@ -40,6 +40,7 @@ type BindersContextValue = {
   binders: Binder[]
   getBinder: (id: string) => Binder | undefined
   createBinder: (name: string, grid?: GridLayout) => Binder
+  createPokedex: (name: string, grid?: GridLayout) => Binder
   createWishlist: (name: string, grid?: GridLayout) => Binder
   ensurePokedex: () => Binder
   ensureRepository: () => Binder
@@ -51,6 +52,7 @@ type BindersContextValue = {
   addPages: (id: string, count?: number) => void
   removePage: (id: string, pageIndex: number) => void
   reorderPages: (id: string, fromIndex: number, toIndex: number) => void
+  reorderBinders: (activeId: string, overId: string) => void
   swapSlot: (id: string, from: SlotRef, to: SlotRef) => void
   addCardsToPage: (id: string, pageIndex: number, cardIds: string[]) => number
   clearPage: (id: string, pageIndex: number) => void
@@ -131,6 +133,15 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     return binder
   }, [])
 
+  const createPokedex = useCallback((name: string, grid: GridLayout = '3x3') => {
+    const binder = createPokedexBinder(grid, {
+      kind: 'pokedex',
+      name: name.trim() || 'Pokédex',
+    })
+    setBinders((prev) => [binder, ...prev])
+    return binder
+  }, [])
+
   const createWishlist = useCallback((name: string, grid: GridLayout = '3x3') => {
     const binder = createWishlistBinder(name.trim() || 'Pokédex desejada', grid)
     setBinders((prev) => [binder, ...prev])
@@ -185,7 +196,8 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     setBinders((prev) =>
       prev.filter((b) => {
         if (b.id !== id) return true
-        if (b.kind === 'pokedex' || b.kind === 'repository') return true
+        // Repositório é singleton — não apagar
+        if (b.kind === 'repository') return true
         return false
       }),
     )
@@ -270,6 +282,20 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     },
     [update],
   )
+
+  const reorderBinders = useCallback((activeId: string, overId: string) => {
+    if (activeId === overId) return
+    setBinders((prev) => {
+      const from = prev.findIndex((b) => b.id === activeId)
+      const to = prev.findIndex((b) => b.id === overId)
+      if (from < 0 || to < 0 || from === to) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      if (!moved) return prev
+      next.splice(to, 0, moved)
+      return next
+    })
+  }, [])
 
   const swapSlot = useCallback(
     (id: string, from: SlotRef, to: SlotRef) => {
@@ -521,6 +547,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       binders,
       getBinder,
       createBinder,
+      createPokedex,
       createWishlist,
       ensurePokedex,
       ensureRepository,
@@ -532,6 +559,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       addPages,
       removePage,
       reorderPages,
+      reorderBinders,
       swapSlot,
       addCardsToPage,
       clearPage,
@@ -548,6 +576,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       binders,
       getBinder,
       createBinder,
+      createPokedex,
       createWishlist,
       ensurePokedex,
       ensureRepository,
@@ -559,6 +588,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       addPages,
       removePage,
       reorderPages,
+      reorderBinders,
       swapSlot,
       addCardsToPage,
       clearPage,

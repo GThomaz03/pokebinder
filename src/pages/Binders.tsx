@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { ShareModal } from '../components/ShareModal'
 import { useAuth } from '../hooks/useAuth'
 import { useBinders } from '../hooks/useBinders'
@@ -25,6 +39,7 @@ import './CollabBinder.css'
 
 type ModalState =
   | { mode: 'create-custom' }
+  | { mode: 'create-pokedex' }
   | { mode: 'create-wishlist' }
   | { mode: 'create-shared' }
   | { mode: 'rename'; id: string; name: string }
@@ -36,11 +51,12 @@ export function BindersPage() {
   const {
     binders,
     createBinder,
+    createPokedex,
     createWishlist,
-    ensurePokedex,
     ensureRepository,
     deleteBinder,
     renameBinder,
+    reorderBinders,
     progress,
   } = useBinders()
   const [modal, setModal] = useState<ModalState>(null)
@@ -50,6 +66,14 @@ export function BindersPage() {
   const [sharedBinders, setSharedBinders] = useState<SharedBinderRow[]>([])
   const [pubBusy, setPubBusy] = useState<string | null>(null)
   const [collabBusy, setCollabBusy] = useState(false)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+  )
 
   const refreshSocial = useCallback(async () => {
     if (!user) {
@@ -76,13 +100,17 @@ export function BindersPage() {
     void refreshSocial()
   }, [refreshSocial, isAuthenticated])
 
+  useEffect(() => {
+    if (!menuOpenId) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpenId(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [menuOpenId])
+
   const { entries } = useInventory()
   const inventoryTotal = inventoryCardCount(entries)
-
-  function onPokedex() {
-    const binder = ensurePokedex()
-    navigate(`/binders/${binder.id}`)
-  }
 
   function onRepository() {
     const binder = ensureRepository()
@@ -96,6 +124,12 @@ export function BindersPage() {
 
     if (modal.mode === 'create-custom') {
       const binder = createBinder(trimmed)
+      setModal(null)
+      navigate(`/binders/${binder.id}`)
+      return
+    }
+    if (modal.mode === 'create-pokedex') {
+      const binder = createPokedex(trimmed)
       setModal(null)
       navigate(`/binders/${binder.id}`)
       return
@@ -145,6 +179,13 @@ export function BindersPage() {
     }
   }
 
+  function onBinderDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    setActiveDragId(null)
+    if (!over || active.id === over.id) return
+    reorderBinders(String(active.id), String(over.id))
+  }
+
   return (
     <div className="binders-page">
       <header className="binders-hero">
@@ -157,14 +198,14 @@ export function BindersPage() {
         <div className="hero-actions">
           <button
             type="button"
-            className="btn primary"
+            className="btn btn-action btn-action--custom"
             onClick={() => setModal({ mode: 'create-custom' })}
           >
             Novo fichário
           </button>
           <button
             type="button"
-            className="btn accent"
+            className="btn btn-action btn-action--shared"
             onClick={() => {
               if (!isAuthenticated) {
                 openAuth('signin')
@@ -175,18 +216,26 @@ export function BindersPage() {
           >
             Novo compartilhado
           </button>
-          <button type="button" className="btn ghost" onClick={onPokedex}>
-            Abrir Pokédex
-          </button>
-          <button type="button" className="btn ghost" onClick={onRepository}>
-            Abrir Repositório
+          <button
+            type="button"
+            className="btn btn-action btn-action--pokedex"
+            onClick={() => setModal({ mode: 'create-pokedex' })}
+          >
+            Nova Pokédex
           </button>
           <button
             type="button"
-            className="btn ghost"
+            className="btn btn-action btn-action--wishlist"
             onClick={() => setModal({ mode: 'create-wishlist' })}
           >
             Nova Pokédex desejada
+          </button>
+          <button
+            type="button"
+            className="btn btn-action btn-action--repository"
+            onClick={onRepository}
+          >
+            Abrir Repositório
           </button>
         </div>
       </header>
@@ -249,96 +298,81 @@ export function BindersPage() {
       {binders.length === 0 ? (
         <p className="empty">Nenhum fichário pessoal ainda. Crie um ou abra a Pokédex.</p>
       ) : (
-        <div className="binder-list">
-          {binders.map((b) => {
-            const prog = progress(b.id)
-            const pct =
-              b.kind === 'pokedex' || b.kind === 'wishlist'
-                ? prog.total
-                  ? Math.round((prog.owned / prog.total) * 100)
-                  : 0
-                : b.kind === 'repository'
-                  ? inventoryTotal > 0
-                    ? 100
-                    : 0
-                  : prog.slots
-                    ? Math.round((prog.filled / prog.slots) * 100)
-                    : 0
-            const publishedOnProfile = isPublished(b.id)
-            return (
-              <article key={b.id} className="binder-card">
-                <button
-                  type="button"
-                  className="binder-open"
-                  onClick={() => navigate(`/binders/${b.id}`)}
-                >
-                  <span className={`kind ${b.kind}`}>
-                    {b.kind === 'pokedex'
-                      ? 'Pokédex'
-                      : b.kind === 'wishlist'
-                        ? 'Desejada'
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={(e) => {
+            setMenuOpenId(null)
+            setActiveDragId(String(e.active.id))
+          }}
+          onDragCancel={() => setActiveDragId(null)}
+          onDragEnd={onBinderDragEnd}
+        >
+          <SortableContext items={binders.map((b) => b.id)} strategy={rectSortingStrategy}>
+            <div className="binder-list" aria-label="Lista de fichários — arraste para reordenar">
+              {binders.map((b) => {
+                const prog = progress(b.id)
+                const pct =
+                  b.kind === 'pokedex' || b.kind === 'wishlist'
+                    ? prog.total
+                      ? Math.round((prog.owned / prog.total) * 100)
+                      : 0
+                    : b.kind === 'repository'
+                      ? inventoryTotal > 0
+                        ? 100
+                        : 0
+                      : prog.slots
+                        ? Math.round((prog.filled / prog.slots) * 100)
+                        : 0
+                const publishedOnProfile = isPublished(b.id)
+                return (
+                  <SortableBinderCard
+                    key={b.id}
+                    binder={b}
+                    pct={pct}
+                    progressLabel={
+                      b.kind === 'pokedex' || b.kind === 'wishlist'
+                        ? `${prog.owned}/${prog.total} espécies`
                         : b.kind === 'repository'
-                          ? 'Repositório'
-                          : 'Personalizado'}
-                  </span>
-                  <h2>{b.name}</h2>
-                  <p>
-                    {b.grid}
-                    {b.kind === 'repository'
-                      ? ` · ${inventoryTotal} cartas`
-                      : ` · ${b.pages.length} páginas`}
-                    {publishedOnProfile ? ' · No perfil' : ''}
-                  </p>
-                  <div className="bar">
-                    <i style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="pct">
-                    {b.kind === 'pokedex' || b.kind === 'wishlist'
-                      ? `${prog.owned}/${prog.total} espécies`
-                      : b.kind === 'repository'
-                        ? `${inventoryTotal} cartas`
-                        : `${prog.filled} cartas`}
-                  </span>
-                </button>
-                <div className="card-actions">
-                  <button type="button" className="rename" onClick={() => setShareTarget(b)}>
-                    Compartilhar
-                  </button>
-                  <button
-                    type="button"
-                    className="rename"
-                    disabled={pubBusy === b.id}
-                    onClick={() => void togglePublish(b)}
-                  >
-                    {pubBusy === b.id
-                      ? '…'
-                      : publishedOnProfile
-                        ? 'Despublicar'
-                        : 'Publicar no perfil'}
-                  </button>
-                  <button
-                    type="button"
-                    className="rename"
-                    onClick={() => setModal({ mode: 'rename', id: b.id, name: b.name })}
-                  >
-                    Renomear
-                  </button>
-                  {b.kind !== 'pokedex' && b.kind !== 'repository' && (
-                    <button
-                      type="button"
-                      className="delete"
-                      onClick={() => {
-                        if (window.confirm(`Apagar “${b.name}”?`)) deleteBinder(b.id)
-                      }}
-                    >
-                      Apagar
-                    </button>
-                  )}
-                </div>
-              </article>
-            )
-          })}
-        </div>
+                          ? `${inventoryTotal} cartas`
+                          : `${prog.filled} cartas`
+                    }
+                    metaLabel={
+                      b.kind === 'repository'
+                        ? `${b.grid} · ${inventoryTotal} cartas`
+                        : `${b.grid} · ${b.pages.length} páginas`
+                    }
+                    publishedOnProfile={publishedOnProfile}
+                    menuOpen={menuOpenId === b.id}
+                    pubBusy={pubBusy === b.id}
+                    dragging={activeDragId === b.id}
+                    onOpen={() => navigate(`/binders/${b.id}`)}
+                    onMenuToggle={() =>
+                      setMenuOpenId(menuOpenId === b.id ? null : b.id)
+                    }
+                    onMenuClose={() => setMenuOpenId(null)}
+                    onShare={() => {
+                      setMenuOpenId(null)
+                      setShareTarget(b)
+                    }}
+                    onPublish={() => {
+                      setMenuOpenId(null)
+                      void togglePublish(b)
+                    }}
+                    onRename={() => {
+                      setMenuOpenId(null)
+                      setModal({ mode: 'rename', id: b.id, name: b.name })
+                    }}
+                    onDelete={() => {
+                      setMenuOpenId(null)
+                      if (window.confirm(`Apagar “${b.name}”?`)) deleteBinder(b.id)
+                    }}
+                  />
+                )
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {modal && (
@@ -346,20 +380,24 @@ export function BindersPage() {
           title={
             modal.mode === 'create-custom'
               ? 'Novo fichário'
-              : modal.mode === 'create-wishlist'
-                ? 'Nova Pokédex desejada'
-                : modal.mode === 'create-shared'
-                  ? 'Novo fichário compartilhado'
-                  : 'Renomear fichário'
+              : modal.mode === 'create-pokedex'
+                ? 'Nova Pokédex'
+                : modal.mode === 'create-wishlist'
+                  ? 'Nova Pokédex desejada'
+                  : modal.mode === 'create-shared'
+                    ? 'Novo fichário compartilhado'
+                    : 'Renomear fichário'
           }
           initial={
             modal.mode === 'rename'
               ? modal.name
-              : modal.mode === 'create-wishlist'
-                ? 'Pokédex desejada'
-                : modal.mode === 'create-shared'
-                  ? 'Fichário com amigos'
-                  : 'Meu fichário'
+              : modal.mode === 'create-pokedex'
+                ? 'Pokédex'
+                : modal.mode === 'create-wishlist'
+                  ? 'Pokédex desejada'
+                  : modal.mode === 'create-shared'
+                    ? 'Fichário com amigos'
+                    : 'Meu fichário'
           }
           confirmLabel={
             modal.mode === 'rename' ? 'Salvar' : collabBusy ? 'Criando…' : 'Criar'
@@ -378,6 +416,174 @@ export function BindersPage() {
         snapshot={shareTarget}
         onPublished={() => void refreshSocial()}
       />
+    </div>
+  )
+}
+
+function SortableBinderCard({
+  binder,
+  pct,
+  progressLabel,
+  metaLabel,
+  publishedOnProfile,
+  menuOpen,
+  pubBusy,
+  dragging,
+  onOpen,
+  onMenuToggle,
+  onMenuClose,
+  onShare,
+  onPublish,
+  onRename,
+  onDelete,
+}: {
+  binder: Binder
+  pct: number
+  progressLabel: string
+  metaLabel: string
+  publishedOnProfile: boolean
+  menuOpen: boolean
+  pubBusy: boolean
+  dragging: boolean
+  onOpen: () => void
+  onMenuToggle: () => void
+  onMenuClose: () => void
+  onShare: () => void
+  onPublish: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: binder.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  const kindLabel =
+    binder.kind === 'pokedex'
+      ? 'Pokédex'
+      : binder.kind === 'wishlist'
+        ? 'Desejada'
+        : binder.kind === 'repository'
+          ? 'Repositório'
+          : 'Personalizado'
+
+  return (
+    <article
+      ref={setNodeRef}
+      style={style}
+      className={`binder-card${publishedOnProfile ? ' is-public' : ''}${
+        isDragging || dragging ? ' is-dragging' : ''
+      }`}
+    >
+      {publishedOnProfile && (
+        <span className="binder-public-badge" title="Visível no seu perfil">
+          No perfil
+        </span>
+      )}
+      <BinderCardMenu
+        open={menuOpen}
+        busy={pubBusy}
+        published={publishedOnProfile}
+        canDelete={binder.kind !== 'repository'}
+        onToggle={onMenuToggle}
+        onClose={onMenuClose}
+        onShare={onShare}
+        onPublish={onPublish}
+        onRename={onRename}
+        onDelete={onDelete}
+      />
+      <button
+        type="button"
+        className="binder-open"
+        {...attributes}
+        {...listeners}
+        onClick={onOpen}
+      >
+        <span className={`kind ${binder.kind}`}>{kindLabel}</span>
+        <h2>{binder.name}</h2>
+        <p>{metaLabel}</p>
+        <div className="bar">
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        <span className="pct">{progressLabel}</span>
+      </button>
+    </article>
+  )
+}
+
+function BinderCardMenu({
+  open,
+  busy,
+  published,
+  canDelete,
+  onToggle,
+  onClose,
+  onShare,
+  onPublish,
+  onRename,
+  onDelete,
+}: {
+  open: boolean
+  busy: boolean
+  published: boolean
+  canDelete: boolean
+  onToggle: () => void
+  onClose: () => void
+  onShare: () => void
+  onPublish: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const menuId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', onPointer)
+    return () => document.removeEventListener('mousedown', onPointer)
+  }, [open, onClose])
+
+  return (
+    <div className="binder-menu" ref={rootRef}>
+      <button
+        type="button"
+        className="binder-menu-trigger"
+        aria-label="Mais opções"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+      >
+        ⋮
+      </button>
+      {open && (
+        <div className="binder-menu-panel" role="menu" id={menuId}>
+          <button type="button" role="menuitem" onClick={onShare}>
+            Compartilhar
+          </button>
+          <button type="button" role="menuitem" disabled={busy} onClick={onPublish}>
+            {busy ? '…' : published ? 'Despublicar do perfil' : 'Publicar no perfil'}
+          </button>
+          <button type="button" role="menuitem" onClick={onRename}>
+            Renomear
+          </button>
+          {canDelete && (
+            <button type="button" role="menuitem" className="is-danger" onClick={onDelete}>
+              Apagar
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -197,33 +197,33 @@
 
 .collab-viz-toggle .switch {
   position: relative;
-  width: 2.4rem;
-  height: 1.35rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  width: 2.5rem;
+  height: 1.4rem;
+  border-radius: var(--chip-radius, 2px);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
   padding: 0;
   cursor: pointer;
 }
 
 .collab-viz-toggle .switch i {
   position: absolute;
-  top: 0.15rem;
-  left: 0.15rem;
-  width: 0.95rem;
-  height: 0.95rem;
-  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  width: calc(1.4rem - 6px);
+  height: calc(1.4rem - 6px);
+  border-radius: var(--chip-radius, 2px);
   background: var(--muted);
   transition: transform 0.15s, background 0.15s;
 }
 
 .collab-viz-toggle .switch.on {
-  background: color-mix(in srgb, var(--accent) 28%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 28%, var(--bg-elevated));
   border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
 
 .collab-viz-toggle .switch.on i {
-  transform: translateX(1rem);
+  transform: translateX(1.05rem);
   background: var(--accent);
 }
 

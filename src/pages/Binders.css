@@ -74,6 +74,55 @@
   color: var(--accent);
 }
 
+.btn-action {
+  border: 1px solid transparent;
+  color: var(--fab-fg);
+}
+
+.btn-action--custom {
+  background: var(--primary);
+}
+
+.btn-action--custom:hover {
+  background: var(--primary-hover);
+}
+
+.btn-action--shared {
+  background: #5b8fd4;
+  color: #0c0e12;
+}
+
+.btn-action--shared:hover {
+  background: #74a3e0;
+}
+
+.btn-action--pokedex {
+  background: #e07a3a;
+  color: #0c0e12;
+}
+
+.btn-action--pokedex:hover {
+  background: #ef8c4d;
+}
+
+.btn-action--repository {
+  background: var(--success);
+  color: #0c0e12;
+}
+
+.btn-action--repository:hover {
+  background: #7fd09a;
+}
+
+.btn-action--wishlist {
+  background: var(--chrome);
+  color: #0c0e12;
+}
+
+.btn-action--wishlist:hover {
+  background: #91a8c2;
+}
+
 .kind.wishlist {
   background: color-mix(in srgb, var(--chrome) 28%, transparent);
   color: var(--chrome);
@@ -100,8 +149,40 @@
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-page);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow);
+}
+
+.binder-card.is-public {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+}
+
+.binder-card.is-dragging {
+  opacity: 0.88;
+  z-index: 5;
+  box-shadow: 6px 6px 0 #000;
+  cursor: grabbing;
+}
+
+.binder-card.is-dragging .binder-open {
+  cursor: grabbing;
+}
+
+.binder-public-badge {
+  position: absolute;
+  top: 0.7rem;
+  right: 2.55rem;
+  z-index: 2;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.4rem;
+  border-radius: var(--chip-radius);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  pointer-events: none;
 }
 
 .binder-open {
@@ -112,8 +193,86 @@
   width: 100%;
   text-align: left;
   padding: 1rem;
+  padding-right: 2.75rem;
   display: grid;
   gap: 0.35rem;
+  border-radius: inherit;
+  cursor: grab;
+  touch-action: none;
+}
+
+.binder-card.is-public .binder-open {
+  padding-right: 6.5rem;
+}
+
+.binder-menu {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 3;
+}
+
+.binder-menu-trigger {
+  appearance: none;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.binder-menu-trigger:hover,
+.binder-menu-trigger[aria-expanded='true'] {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.binder-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  min-width: 11.5rem;
+  display: grid;
+  padding: 0.3rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  box-shadow: var(--shadow);
+}
+
+.binder-menu-panel button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 650;
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+}
+
+.binder-menu-panel button:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.binder-menu-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.binder-menu-panel button.is-danger {
+  color: var(--danger);
 }
 
 .kind {
@@ -164,38 +323,6 @@
   font-weight: 700;
   color: var(--muted);
   font-family: var(--font-mono);
-}
-
-.delete {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--danger);
-  flex: 1;
-  padding: 0.55rem;
-  font-weight: 650;
-  font-size: 0.8rem;
-}
-
-.card-actions {
-  display: flex;
-  border-top: 1px solid var(--border);
-}
-
-.rename {
-  appearance: none;
-  border: 0;
-  border-right: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  flex: 1;
-  padding: 0.55rem;
-  font-weight: 650;
-  font-size: 0.8rem;
-}
-
-.rename:hover {
-  color: var(--accent);
 }
 
 .name-modal-backdrop {
@@ -302,8 +429,4 @@
   font-size: 0.62rem;
   font-weight: 800;
   background: color-mix(in srgb, var(--accent) 20%, var(--surface));
-}
-
-.rename:disabled {
-  opacity: 0.5;
 }

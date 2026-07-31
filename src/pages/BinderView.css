@@ -37,6 +37,19 @@
   color: var(--accent);
 }
 
+a.btn-ghost.binder-home,
+button.btn-ghost.binder-home {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+button.btn-ghost.binder-home:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .view-actions {
   display: flex;
   gap: 0.45rem;

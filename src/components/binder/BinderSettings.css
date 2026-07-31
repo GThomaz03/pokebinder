@@ -11,13 +11,13 @@
   right: 0;
   z-index: 81;
   width: min(360px, 100%);
-  height: 100vh;
+  height: 100dvh;
   overflow: auto;
   background: var(--bg-elevated, #0b1220);
   border-left: 1px solid var(--border-strong);
-  padding: 1rem 1rem 2rem;
+  padding: 1rem 1rem 1.5rem;
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   align-content: start;
   animation: slide-in 0.2s ease;
   color: var(--text);
@@ -40,6 +40,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  padding-bottom: 0.15rem;
 }
 
 .settings-head .icon-btn,
@@ -51,69 +52,149 @@
   color: var(--muted);
   width: 2rem;
   height: 2rem;
-  border-radius: 8px;
+  border-radius: var(--btn-radius, 2px);
   display: grid;
   place-items: center;
   font-size: 1.2rem;
   line-height: 1;
+  cursor: pointer;
 }
-
 
 .settings-head h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
 }
 
-.field input {
+.settings-body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.settings-block {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.85rem 0.9rem;
   background: var(--surface);
-  color: var(--text);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 0.5rem 0.65rem;
-  font: inherit;
+  border-radius: var(--radius-page, 2px);
 }
 
-.settings-drawer section h3 {
-  margin: 0 0 0.65rem;
-  font-size: 0.7rem;
+.settings-block h3,
+.settings-block-head h3 {
+  margin: 0;
+  font-size: 0.68rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 800;
   color: var(--muted);
+}
+
+.settings-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.settings-pct {
+  font-style: normal;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.settings-block--progress .meter {
+  margin: 0;
+}
+
+.settings-sub {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.settings-sub--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-sub-label {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.settings-sub .muted {
+  margin: 0.15rem 0 0;
+}
+
+.settings-inline-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.field-label {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.field input,
+.field select {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--btn-radius, 2px);
+  padding: 0.5rem 0.65rem;
+  font: inherit;
 }
 
 .grid-choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .grid-choices button {
   appearance: none;
   border: 1px solid var(--border-strong);
-  background: var(--surface);
+  background: var(--bg-elevated);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--btn-radius, 2px);
   padding: 0.4rem 0.65rem;
   font-weight: 700;
   font-size: 0.8rem;
+  cursor: pointer;
 }
 
 .grid-choices button.active {
   background: var(--primary);
   border-color: var(--primary);
+  color: var(--fab-fg, #fff);
 }
 
 .meter {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.4rem;
   font-size: 0.85rem;
   font-weight: 700;
 }
 
 .meter .bar {
   height: 8px;
-  border-radius: var(--chip-radius, 4px);
-  background: var(--surface-2);
+  border-radius: var(--chip-radius, 2px);
+  background: var(--surface-2, color-mix(in srgb, var(--bg-elevated) 70%, var(--border)));
   overflow: hidden;
 }
 
@@ -123,86 +204,116 @@
   background: var(--primary);
 }
 
-.meter em {
-  font-style: normal;
-  color: var(--muted);
-  font-size: 0.75rem;
+.toggle-list {
+  display: grid;
+  gap: 0;
 }
 
 .toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0.55rem 0;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border);
   font-size: 0.88rem;
+  cursor: pointer;
 }
 
+.toggle-list .toggle:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.toggle-list .toggle:last-child {
+  padding-bottom: 0;
+}
+
+.toggle-copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.toggle-label {
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.toggle-hint {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* Square track + square thumb — matches --chip-radius / --btn-radius */
 .switch {
   appearance: none;
-  width: 42px;
-  height: 24px;
-  border-radius: var(--chip-radius, 4px);
-  border: 0;
-  background: var(--surface-2);
+  width: 2.5rem;
+  height: 1.4rem;
+  border-radius: var(--chip-radius, 2px);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
   position: relative;
   padding: 0;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .switch i {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: white;
-  transition: transform 0.15s;
+  top: 2px;
+  left: 2px;
+  width: calc(1.4rem - 6px);
+  height: calc(1.4rem - 6px);
+  border-radius: var(--chip-radius, 2px);
+  background: var(--muted);
+  transition: transform 0.15s, background 0.15s;
 }
 
 .switch.on {
-  background: var(--primary);
+  background: color-mix(in srgb, var(--primary) 28%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border-strong));
 }
 
 .switch.on i {
-  transform: translateX(18px);
-}
-
-.field {
-  display: grid;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 0.5rem;
-}
-
-.field select {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  padding: 0.5rem 0.65rem;
+  transform: translateX(1.05rem);
+  background: var(--primary);
 }
 
 .btn-soft {
   appearance: none;
   border: 1px solid var(--border-strong);
-  background: var(--surface);
+  background: var(--bg-elevated);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: var(--btn-radius, 2px);
   padding: 0.4rem 0.75rem;
   font-weight: 650;
   font-size: 0.8rem;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .muted {
   color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  margin: 0;
 }
 
 .page-stepper {
   display: flex;
   gap: 0.5rem;
+}
+
+.settings-embedded {
+  display: contents;
+}
+
+.settings-embedded .settings-body {
+  display: grid;
+  gap: 0.85rem;
 }
