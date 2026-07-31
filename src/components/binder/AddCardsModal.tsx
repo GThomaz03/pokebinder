@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { searchCards } from '../../api/tcgdex'
+import { searchCardsRepo } from '../../api/cards/cardRepository'
 import { hydrateCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { LANG_OPTIONS } from '../../i18n'
@@ -57,6 +57,7 @@ export function AddCardsModal({
   )
   const [selected, setSelected] = useState<Brief[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [addToCurrent, setAddToCurrent] = useState(true)
   const reqId = useRef(0)
   const queryRef = useRef(query)
@@ -66,6 +67,7 @@ export function AddCardsModal({
     const q = nextQuery.trim()
     if (!q) {
       setResults([])
+      setSearchError(null)
       return
     }
 
@@ -76,20 +78,24 @@ export function AddCardsModal({
       lastSearch.results.length > 0
     ) {
       setResults(lastSearch.results)
+      setSearchError(null)
       return
     }
 
     const id = ++reqId.current
     setLoading(true)
+    setSearchError(null)
     try {
-      const data = (await searchCards(nextLang, q)) as Brief[]
+      const data = (await searchCardsRepo(nextLang, q)) as Brief[]
       if (id !== reqId.current) return
       for (const card of data) seedCardBrief(card)
       setResults(data)
       lastSearch = { lang: nextLang, query: q, results: data }
+      if (data.length === 0) setSearchError(null)
     } catch {
       if (id !== reqId.current) return
       setResults([])
+      setSearchError('Catálogo indisponível no momento. Tente novamente.')
     } finally {
       if (id === reqId.current) setLoading(false)
     }
@@ -188,7 +194,8 @@ export function AddCardsModal({
         <div className="add-body">
           <div className="add-results">
             {loading && <p className="state">Buscando…</p>}
-            {!loading && results.length === 0 && (
+            {!loading && searchError && <p className="state error">{searchError}</p>}
+            {!loading && !searchError && results.length === 0 && (
               <p className="state">
                 Busque por nome ou numeração da carta (PT / EN / JA).
               </p>

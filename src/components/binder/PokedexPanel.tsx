@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  fetchSpeciesVariants,
-  type CardVariantEntry,
-} from '../../api/tcgdex'
-import { cacheVariantPrice, formatPrice, seedCardBrief } from '../../api/prices'
+import { fetchSpeciesVariants, type CardVariantEntry } from '../../api/tcgdex'
+import { cacheVariantPrice, ESTIMATED_BRL_HINT, formatPrice, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { useLanguage } from '../../hooks/useLanguage'
 import { getPokedexName } from '../../lib/binderUtils'
@@ -218,7 +215,11 @@ export function PokedexPanel({
                     )}
                     {isTop && <span className="top-badge">TOPO</span>}
                     <span className="nat-badge">{cardLang.toUpperCase()}</span>
-                    {price && <span className="price">{price}</span>}
+                    {price && (
+                      <span className="price" title={ESTIMATED_BRL_HINT}>
+                        {price}
+                      </span>
+                    )}
                   </button>
                   <div className="dex-meta">
                     <strong>{card.name}</strong>

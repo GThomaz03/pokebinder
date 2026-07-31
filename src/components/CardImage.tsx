@@ -5,7 +5,7 @@ import {
   imageCacheKey,
   setCachedImageUrl,
 } from '../api/imageCache'
-import { cardImageCandidates, inferMissingImageCandidates } from '../api/tcgdex'
+import { cardImageCandidates, inferMissingImageCandidates } from '../api/images/imageProvider'
 
 type Props = {
   /** Image base from TCGdex (`…/pt/ex/ex6/113`) or a full URL (`…/low.webp`) */

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CardImage } from '../components/CardImage'
 import {
-  fetchDeckCardMeta,
-  searchCardsAdvanced,
+  fetchDeckCardMetaRepo as fetchDeckCardMeta,
+  searchCardsAdvancedRepo as searchCardsAdvanced,
   type DeckSearchHit,
-} from '../api/tcgdex'
+} from '../api/cards/cardRepository'
 import { seedCardBrief } from '../api/prices'
 import { useDecks } from '../hooks/useDecks'
 import { useInventory } from '../hooks/useInventory'

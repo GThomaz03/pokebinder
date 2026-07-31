@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
-import { formatPrice, getCachedCard, getCachedPrice, hydrateCard } from '../../api/prices'
+import {
+  ESTIMATED_BRL_HINT,
+  formatPrice,
+  getCachedCard,
+  getCachedPrice,
+} from '../../api/prices'
 import { baseCardId, parseOwnedKey } from '../../api/tcgdex'
 import { slotDragId, slotDropId, type SlotDragData, type SlotDropData } from '../../lib/binderDnd'
 import { CardImage } from '../CardImage'
+import { useCard, useFxRates } from '../../hooks/useCardQueries'
 import { useLanguage } from '../../hooks/useLanguage'
 import { getPokedexName } from '../../lib/binderUtils'
 import {
@@ -208,17 +214,13 @@ export function BinderSlot({
     }
   }, [showOwnerTip, ownerName, ownerColor, slotRef.slotIndex, binder.grid])
 
+  const { lang: keyLang } = rawId ? parseOwnedKey(rawId) : { lang: undefined }
+  const cardQuery = useCard(keyLang ?? lang, rawId, Boolean(rawId))
+  useFxRates(settings.showPrices)
+
   useEffect(() => {
-    if (!rawId) return
-    let cancelled = false
-    const { lang: keyLang } = parseOwnedKey(rawId)
-    hydrateCard(keyLang ?? lang, rawId, Boolean(keyLang)).then(() => {
-      if (!cancelled) setTick((t) => t + 1)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [rawId, lang, cardId])
+    if (cardQuery.dataUpdatedAt) setTick((t) => t + 1)
+  }, [cardQuery.dataUpdatedAt])
 
   useEffect(() => {
     if (isDragging) suppressClickRef.current = true
@@ -226,9 +228,10 @@ export function BinderSlot({
 
   void tick
 
-  const cached = cardId ? getCachedCard(cardId) : undefined
+  const cached = cardId ? (cardQuery.data ?? getCachedCard(cardId)) : undefined
   const priceObj = rawId ? getCachedPrice(rawId) ?? cached?.price : undefined
   const price = settings.showPrices ? formatPrice(priceObj, settings.priceMarket) : null
+  const priceTitle = price ? ESTIMATED_BRL_HINT : undefined
   const isMissingPokedex =
     slot?.type === 'pokedex' && !slot.topCardId && slot.ownedCardIds.length === 0
   const cardMarkedMissing = slot?.type === 'card' && Boolean(slot.missing)
@@ -336,7 +339,11 @@ export function BinderSlot({
         )}
 
         {pinned && <span className="pin-badge">FIXA</span>}
-        {price && <span className="price-tag">{price}</span>}
+        {price && (
+          <span className="price-tag" title={priceTitle}>
+            {price}
+          </span>
+        )}
 
         {slot?.type === 'pokedex' && slot.ownedCardIds.length > 0 && (
           <span className="owned-count">{slot.ownedCardIds.length}</span>

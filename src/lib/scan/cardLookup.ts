@@ -1,4 +1,6 @@
-import { searchCards } from '../../api/tcgdex'
+import { fetchCardRestRepo, searchCardsRepo } from '../../api/cards/cardRepository'
+import { fetchJson } from '../../api/cards/http'
+import { API_CONFIG } from '../../api/config'
 import type { CardLang } from '../../types'
 import type { CardCandidate, OcrHit, ScanResolveResult, SetIndex } from './types'
 
@@ -100,13 +102,13 @@ export async function loadSetCatalog(lang: CardLang = 'en'): Promise<SetBrief[]>
   }
   if (setsCache) return setsCache
   try {
-    const res = await fetch(`https://api.tcgdex.net/v2/${lang}/sets`)
-    if (!res.ok) throw new Error(String(res.status))
-    const data = (await res.json()) as Array<{
-      id: string
-      name: string
-      cardCount?: { official?: number; total?: number }
-    }>
+    const data = await fetchJson<
+      Array<{
+        id: string
+        name: string
+        cardCount?: { official?: number; total?: number }
+      }>
+    >(`${API_CONFIG.tcgdex.baseUrl}/${lang}/sets`, { maxRetries: 1 })
     setsCache = data.map((s) => ({
       id: s.id,
       name: s.name,
@@ -136,20 +138,7 @@ type RestCard = {
 }
 
 async function fetchCardRest(lang: CardLang, setId: string, localId: string): Promise<RestCard | null> {
-  const langs = lang === 'en' ? (['en'] as const) : ([lang, 'en'] as const)
-  for (const lid of localIdVariants(localId)) {
-    for (const L of langs) {
-      try {
-        const res = await fetch(`https://api.tcgdex.net/v2/${L}/cards/${setId}-${lid}`)
-        if (!res.ok) continue
-        const card = (await res.json()) as RestCard
-        if (card?.id) return card
-      } catch {
-        // continue
-      }
-    }
-  }
-  return null
+  return fetchCardRestRepo(lang, setId, localId)
 }
 
 function cardImage(imageBase?: string): string | undefined {
@@ -194,13 +183,11 @@ export async function resolveCandidates(
     if (!prev || c.confidence > prev.confidence) byId.set(c.cardId, c)
   }
 
-  // 1) Direct set + number
   if (hit.setId && hit.localId) {
     const card = await fetchCardRest(lang, hit.setId, hit.localId)
     if (card) add(toCandidate(card, Math.max(hit.confidence, 0.9), 'set+number'))
   }
 
-  // 2) Number + set size (009/094)
   if (hit.localId && hit.setTotal) {
     const idx = await loadSetIndex()
     const fromIndex = idx?.byOfficial[String(hit.setTotal)] ?? []
@@ -222,15 +209,9 @@ export async function resolveCandidates(
     )
   }
 
-  // 3) Name hint
   if (hit.nameHint && hit.nameHint.length >= 3) {
     try {
-      const results = (await searchCards(lang, hit.nameHint)) as Array<{
-        id: string
-        name: string
-        localId: string | number
-        image?: string
-      }>
+      const results = await searchCardsRepo(lang, hit.nameHint)
       let list = results
       if (hit.localId) {
         const n = String(Number(hit.localId))
@@ -256,7 +237,6 @@ export async function resolveCandidates(
 
   let candidates = [...byId.values()].sort((a, b) => b.confidence - a.confidence)
 
-  // Name disambiguation boost
   if (hit.nameHint && candidates.length > 1) {
     const q = hit.nameHint.toLowerCase()
     candidates = candidates

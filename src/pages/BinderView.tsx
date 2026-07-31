@@ -11,6 +11,7 @@ import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
 import { useTray } from '../hooks/useTray'
 import { getCachedCard, hydrateCard } from '../api/prices'
+import { useFxRates } from '../hooks/useCardQueries'
 import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { CardImage } from '../components/CardImage'
 import { binderTotalBrl, getPokedexName } from '../lib/binderUtils'
@@ -49,6 +50,7 @@ export function BinderViewPage() {
   const tray = useTray()
 
   const storedBinder = getBinder(id)
+  useFxRates(Boolean(storedBinder?.settings.showPrices))
   const [spreadIndex, setSpreadIndex] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -361,9 +363,9 @@ export function BinderViewPage() {
           {totalValueLabel && (
             <span
               className="binder-total"
-              title={`Soma dos preços (${binder.settings.priceMarket === 'tcgplayer' ? 'TCGPlayer' : 'Cardmarket'})`}
+              title={`Total estimado em BRL via câmbio (${binder.settings.priceMarket === 'tcgplayer' ? 'TCGPlayer' : 'Cardmarket'}) — não é preço do mercado brasileiro`}
             >
-              Total {totalValueLabel}
+              Total estimado {totalValueLabel}
             </span>
           )}
           {binder.kind === 'repository' && (

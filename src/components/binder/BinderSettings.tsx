@@ -184,14 +184,14 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
         <h3>Preços</h3>
         <div className="toggle-list">
           <Toggle
-            label="Mostrar preço em reais"
-            hint="Exibe o valor convertido sob as cartas"
+            label="Mostrar preço estimado em reais"
+            hint="Exibe estimativa convertida de EUR/USD (não é preço do mercado brasileiro)"
             checked={binder.settings.showPrices}
             onChange={(v) => updateSettings({ showPrices: v })}
           />
         </div>
         <label className="field">
-          <span className="field-label">Fonte convertida para BRL</span>
+          <span className="field-label">Fonte → preço estimado (BRL)</span>
           <select
             value={binder.settings.priceMarket}
             onChange={(e) =>
@@ -200,8 +200,8 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
               })
             }
           >
-            <option value="cardmarket">Cardmarket → R$</option>
-            <option value="tcgplayer">TCGPlayer → R$</option>
+            <option value="cardmarket">Cardmarket (EUR) → estimado R$</option>
+            <option value="tcgplayer">TCGPlayer (USD) → estimado R$</option>
           </select>
         </label>
       </section>

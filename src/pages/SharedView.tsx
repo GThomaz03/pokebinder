@@ -520,8 +520,11 @@ function SharedBinderView({ binder }: { binder: Binder }) {
         )}
 
         <div className="shared-value-controls">
-          <span className="shared-total" title="Valor total estimado">
-            Total {totalLabel}
+          <span
+            className="shared-total"
+            title="Total estimado em BRL (conversão FX de preços internacionais)"
+          >
+            Total estimado {totalLabel}
           </span>
           <label className="shared-price-toggle">
             <input

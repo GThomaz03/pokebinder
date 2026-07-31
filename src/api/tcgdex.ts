@@ -1,5 +1,26 @@
 import TCGdex, { Query } from '@tcgdex/sdk'
 import type { CardLang, CardPrice } from '../types'
+import { API_CONFIG } from './config'
+import { CatalogError, fetchJson, withRetry } from './cards/http'
+import { baseCardId, parseOwnedKey } from './cardKeys'
+import {
+  cardImageCandidates,
+  cardImageUrl,
+  inferMissingImageCandidates,
+  inferTcgdexImageBase,
+  toPokemonTcgIoSetId,
+} from './images/imageProvider'
+import { quoteFromPricingSync } from './prices/tcgdexPriceProvider'
+
+export {
+  baseCardId,
+  parseOwnedKey,
+  cardImageCandidates,
+  cardImageUrl,
+  inferMissingImageCandidates,
+  inferTcgdexImageBase,
+  toPokemonTcgIoSetId,
+}
 
 const clients = new Map<CardLang, TCGdex>()
 
@@ -44,205 +65,55 @@ export function getClient(lang: CardLang): TCGdex {
   return client
 }
 
-export function cardImageUrl(
-  imageBase: string | undefined,
-  quality: 'high' | 'low' = 'low',
-): string | undefined {
-  if (!imageBase) return undefined
-  if (/\.(webp|png|jpg|jpeg)$/i.test(imageBase)) return imageBase
-  return `${imageBase}/${quality}.webp`
-}
-
-/** Ordered image candidates (locale → English fallback). */
-export function cardImageCandidates(
-  imageBase: string | undefined,
-  quality: 'high' | 'low' = 'low',
-): string[] {
-  if (!imageBase) return []
-  const primary = cardImageUrl(imageBase, quality)
-  if (!primary) return []
-  const out = [primary]
-  const enBase = imageBase.replace(/\/(pt|ja)\//i, '/en/')
-  if (enBase !== imageBase) {
-    const en = cardImageUrl(enBase, quality)
-    if (en && !out.includes(en)) out.push(en)
-  }
-  const otherQuality = quality === 'low' ? 'high' : 'low'
-  const enOther = cardImageUrl(
-    enBase !== imageBase ? enBase : imageBase.replace(/\/(pt|ja)\//i, '/en/'),
-    otherQuality,
-  )
-  if (enOther && !out.includes(enOther)) out.push(enOther)
-  return out
-}
-
-/** Scarlet & Violet Energy (sve) basic prints — reliable art for nameless TCGdex energies. */
-const BASIC_ENERGY_SVE_INDEX: Record<string, number> = {
-  grass: 1,
-  planta: 1,
-  grama: 1,
-  fire: 2,
-  fogo: 2,
-  water: 3,
-  água: 3,
-  agua: 3,
-  lightning: 4,
-  elétrico: 4,
-  eletrico: 4,
-  raios: 4,
-  psychic: 5,
-  psíquico: 5,
-  psichico: 5,
-  fighting: 6,
-  lutador: 6,
-  lutadora: 6,
-  darkness: 7,
-  sombrio: 7,
-  sombria: 7,
-  metal: 8,
-  metálica: 8,
-  metalica: 8,
-  fairy: 9,
-  fada: 9,
-  colorless: 10,
-  incolor: 10,
-}
-
-function detectBasicEnergyTypeKey(name?: string, energyType?: string): string | null {
-  const blob = `${name ?? ''} ${energyType ?? ''}`.toLowerCase()
-  // Prefer longer keys first (e.g. lightning before nothing)
-  const keys = Object.keys(BASIC_ENERGY_SVE_INDEX).sort((a, b) => b.length - a.length)
-  for (const key of keys) {
-    if (blob.includes(key)) return key
-  }
-  return null
-}
-
-/** Series folder in assets.tcgdex.net paths (`sv03.5` → `sv`, `swsh12.5` → `swsh`). */
-function seriesFromSetId(setId: string): string | undefined {
-  const m = /^([a-z]+)/i.exec(setId)
-  return m?.[1]?.toLowerCase()
-}
-
-/**
- * Map TCGdex set ids to PokémonTCG.io ids (`sv03.5` → `sv3pt5`, `swsh12.5` → `swsh12pt5`).
- */
-export function toPokemonTcgIoSetId(setId: string): string {
-  if (!setId.includes('.')) return setId
-  return setId.replace(/0+(\d)/g, '$1').replace(/\./g, 'pt')
-}
-
-/** Build TCGdex asset base from a card id when the API omits `image`. */
-export function inferTcgdexImageBase(
-  cardId: string,
-  lang: CardLang = 'en',
-  localId?: string | number,
-): string | undefined {
-  const id = baseCardId(cardId)
-  const dash = id.indexOf('-')
-  if (dash <= 0) return undefined
-  const setId = id.slice(0, dash)
-  const lid = String(localId ?? id.slice(dash + 1))
-  const series = seriesFromSetId(setId)
-  if (!series || !lid) return undefined
-  return `https://assets.tcgdex.net/${lang}/${series}/${setId}/${lid}`
-}
-
-/**
- * Extra image URLs when TCGdex has no `image` (very common for basic Energy).
- * Tries reconstructed TCGdex asset paths first, then PokémonTCG.io (+ set-id aliases).
- */
-export function inferMissingImageCandidates(opts: {
-  cardId: string
-  name?: string
-  localId?: string | number
-  energyType?: string
-}): string[] {
-  const urls: string[] = []
-  const id = baseCardId(opts.cardId)
-  const dash = id.indexOf('-')
-  const raw = dash > 0 ? String(opts.localId ?? id.slice(dash + 1)) : String(opts.localId ?? '')
-  const stripped = raw.replace(/^0+/, '') || (raw ? '0' : '')
-  const localIds = [...new Set([raw, stripped].filter(Boolean))]
-
-  for (const lang of ['en', 'pt'] as const) {
-    for (const lid of localIds.length ? localIds : ['']) {
-      const base = inferTcgdexImageBase(id, lang, lid || undefined)
-      if (!base) continue
-      for (const u of cardImageCandidates(base, 'high')) {
-        if (!urls.includes(u)) urls.push(u)
-      }
-      for (const u of cardImageCandidates(base, 'low')) {
-        if (!urls.includes(u)) urls.push(u)
-      }
-    }
-  }
-
-  if (dash > 0) {
-    const setId = id.slice(0, dash)
-    // Only PokémonTCG.io ids (sv03.5 → sv3pt5). Raw TCGdex ids 404.
-    const ioSet = toPokemonTcgIoSetId(setId)
-    for (const n of localIds) {
-      const png = `https://images.pokemontcg.io/${ioSet}/${n}.png`
-      const hires = `https://images.pokemontcg.io/${ioSet}/${n}_hires.png`
-      if (!urls.includes(png)) urls.push(png)
-      if (!urls.includes(hires)) urls.push(hires)
-    }
-  }
-
-  const typeKey = detectBasicEnergyTypeKey(opts.name, opts.energyType)
-  if (typeKey) {
-    const n = BASIC_ENERGY_SVE_INDEX[typeKey]
-    if (n) {
-      const png = `https://images.pokemontcg.io/sve/${n}.png`
-      const hires = `https://images.pokemontcg.io/sve/${n}_hires.png`
-      if (!urls.includes(png)) urls.push(png)
-      if (!urls.includes(hires)) urls.push(hires)
-    }
-  }
-
-  return urls
-}
-
-export function baseCardId(idOrKey: string): string {
-  const i = idOrKey.indexOf('::')
-  return i === -1 ? idOrKey : idOrKey.slice(0, i)
-}
-
-/** Parse keys like `cardId::pt::reverse` or legacy `cardId::reverse`. */
-export function parseOwnedKey(key: string): {
-  cardId: string
-  lang?: CardLang
-  variantParts: string[]
-} {
-  const parts = key.split('::')
-  const cardId = parts[0] ?? key
-  if (parts.length >= 2 && (parts[1] === 'pt' || parts[1] === 'en' || parts[1] === 'ja')) {
-    return { cardId, lang: parts[1], variantParts: parts.slice(2) }
-  }
-  return { cardId, variantParts: parts.slice(1) }
-}
-
 type PricingBlock = {
   cardmarket?: { avg?: number | null; trend?: number | null; low?: number | null }
   tcgplayer?: Record<string, { marketPrice?: number | null } | null> | null
 }
 
+/** @deprecated Prefer priceRepository / PriceQuote. Kept for CachedCard compat. */
 export function extractPrice(card: { pricing?: PricingBlock }): CardPrice {
-  const cm = card.pricing?.cardmarket
-  const tp = card.pricing?.tcgplayer
-  let usd: number | null = null
-  if (tp && typeof tp === 'object') {
-    for (const key of ['normal', 'holofoil', 'reverse-holofoil', '1st-edition-holofoil']) {
-      const p = tp[key]
-      if (p?.marketPrice != null) {
-        usd = p.marketPrice
-        break
+  const q = quoteFromPricingSync('_', card.pricing)
+  return {
+    eur: q.markets.cardmarket,
+    usd: q.markets.tcgplayer,
+    updated: q.updatedAt,
+  }
+}
+
+/** REST fetch centralized here — scanner must not call api.tcgdex.net directly. */
+export async function fetchCardRest(
+  lang: CardLang,
+  setId: string,
+  localId: string,
+): Promise<{
+  id: string
+  name: string
+  localId: string | number
+  image?: string
+  set?: { id?: string; name?: string }
+  pricing?: PricingBlock
+} | null> {
+  const langs: CardLang[] = lang === 'en' ? ['en'] : [lang, 'en']
+  for (const lid of localIdVariants(localId)) {
+    for (const L of langs) {
+      try {
+        const url = `${API_CONFIG.tcgdex.baseUrl}/${L}/cards/${setId}-${lid}`
+        const card = await fetchJson<{
+          id: string
+          name: string
+          localId: string | number
+          image?: string
+          set?: { id?: string; name?: string }
+          pricing?: PricingBlock
+        }>(url, { maxRetries: 1 })
+        if (card?.id) return card
+      } catch (err) {
+        if (err instanceof CatalogError && err.status === 404) continue
+        /* try next */
       }
     }
   }
-  const eur = cm?.avg ?? cm?.trend ?? cm?.low ?? null
-  return { eur, usd, updated: Date.now() }
+  return null
 }
 
 export function variantLabel(type: string, extras: string[] = []): string {
@@ -763,14 +634,14 @@ export async function fetchDeckCardMeta(
 export async function getCard(lang: CardLang, id: string) {
   const cardId = baseCardId(id)
   try {
-    const card = await getClient(lang).card.get(cardId)
+    const card = await withRetry(async () => getClient(lang).card.get(cardId))
     if (card) return card
   } catch {
     // missing in this locale
   }
   if (lang !== 'en') {
     try {
-      const fallback = await getClient('en').card.get(cardId)
+      const fallback = await withRetry(async () => getClient('en').card.get(cardId))
       if (fallback) return fallback
     } catch {
       // ignore

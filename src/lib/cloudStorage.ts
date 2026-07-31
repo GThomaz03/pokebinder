@@ -24,6 +24,62 @@ function requireClient() {
   return supabase
 }
 
+/** Serialize upserts per resource so concurrent saves don't race; coalesce dirty payloads. */
+function createSerializedSaver<T>(saveFn: (userId: string, data: T) => Promise<void>) {
+  let inFlight: Promise<void> | null = null
+  let pending: { userId: string; data: T } | null = null
+
+  return async function serializedSave(userId: string, data: T) {
+    pending = { userId, data }
+    if (inFlight) return inFlight
+
+    inFlight = (async () => {
+      try {
+        while (pending) {
+          const job = pending
+          pending = null
+          await saveFn(job.userId, job.data)
+        }
+      } finally {
+        inFlight = null
+        // If something queued during the finally window, kick another run
+        if (pending) {
+          void serializedSave(pending.userId, pending.data)
+        }
+      }
+    })()
+
+    return inFlight
+  }
+}
+
+async function upsertBinders(userId: string, binders: Binder[]) {
+  const client = requireClient()
+  const { error } = await client.from('user_binders').upsert(
+    { user_id: userId, binders, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' },
+  )
+  if (error) throw error
+}
+
+async function upsertInventory(userId: string, inventory: InventoryMap) {
+  const client = requireClient()
+  const { error } = await client.from('user_inventory').upsert(
+    { user_id: userId, inventory, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' },
+  )
+  if (error) throw error
+}
+
+async function upsertDecks(userId: string, decks: Deck[]) {
+  const client = requireClient()
+  const { error } = await client.from('user_decks').upsert(
+    { user_id: userId, decks, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id' },
+  )
+  if (error) throw error
+}
+
 export async function fetchUserCloudData(userId: string): Promise<UserCloudData | null> {
   const client = requireClient()
 
@@ -46,32 +102,9 @@ export async function fetchUserCloudData(userId: string): Promise<UserCloudData 
   }
 }
 
-export async function saveUserBinders(userId: string, binders: Binder[]) {
-  const client = requireClient()
-  const { error } = await client.from('user_binders').upsert(
-    { user_id: userId, binders, updated_at: new Date().toISOString() },
-    { onConflict: 'user_id' },
-  )
-  if (error) throw error
-}
-
-export async function saveUserInventory(userId: string, inventory: InventoryMap) {
-  const client = requireClient()
-  const { error } = await client.from('user_inventory').upsert(
-    { user_id: userId, inventory, updated_at: new Date().toISOString() },
-    { onConflict: 'user_id' },
-  )
-  if (error) throw error
-}
-
-export async function saveUserDecks(userId: string, decks: Deck[]) {
-  const client = requireClient()
-  const { error } = await client.from('user_decks').upsert(
-    { user_id: userId, decks, updated_at: new Date().toISOString() },
-    { onConflict: 'user_id' },
-  )
-  if (error) throw error
-}
+export const saveUserBinders = createSerializedSaver(upsertBinders)
+export const saveUserInventory = createSerializedSaver(upsertInventory)
+export const saveUserDecks = createSerializedSaver(upsertDecks)
 
 export async function uploadLocalData(userId: string, data: UserCloudData) {
   await Promise.all([
@@ -79,6 +112,26 @@ export async function uploadLocalData(userId: string, data: UserCloudData) {
     saveUserInventory(userId, data.inventory),
     saveUserDecks(userId, data.decks),
   ])
+}
+
+function mapShareRow(data: {
+  id: string
+  token: string
+  resource_type: string
+  resource_id: string
+  title: string | null
+  snapshot: Binder | Deck
+  created_at: string
+}): ShareLink {
+  return {
+    id: data.id,
+    token: data.token,
+    resourceType: data.resource_type as ShareResourceType,
+    resourceId: data.resource_id,
+    title: data.title,
+    snapshot: data.snapshot,
+    createdAt: data.created_at,
+  }
 }
 
 export async function createShareLink(
@@ -102,38 +155,17 @@ export async function createShareLink(
     .single()
 
   if (error) throw error
-
-  return {
-    id: data.id,
-    token: data.token,
-    resourceType: data.resource_type as ShareResourceType,
-    resourceId: data.resource_id,
-    title: data.title,
-    snapshot: data.snapshot as Binder | Deck,
-    createdAt: data.created_at,
-  }
+  return mapShareRow(data)
 }
 
+/** Public read via security-definer RPC (no table-wide SELECT). */
 export async function fetchShareLink(token: string): Promise<ShareLink | null> {
   const client = requireClient()
-  const { data, error } = await client
-    .from('share_links')
-    .select('id, token, resource_type, resource_id, title, snapshot, created_at')
-    .eq('token', token)
-    .maybeSingle()
-
+  const { data, error } = await client.rpc('get_share_link', { p_token: token })
   if (error) throw error
-  if (!data) return null
-
-  return {
-    id: data.id,
-    token: data.token,
-    resourceType: data.resource_type as ShareResourceType,
-    resourceId: data.resource_id,
-    title: data.title,
-    snapshot: data.snapshot as Binder | Deck,
-    createdAt: data.created_at,
-  }
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  return mapShareRow(row as Parameters<typeof mapShareRow>[0])
 }
 
 export async function listUserShareLinks(userId: string): Promise<ShareLink[]> {
@@ -146,15 +178,7 @@ export async function listUserShareLinks(userId: string): Promise<ShareLink[]> {
 
   if (error) throw error
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    token: row.token,
-    resourceType: row.resource_type as ShareResourceType,
-    resourceId: row.resource_id,
-    title: row.title,
-    snapshot: row.snapshot as Binder | Deck,
-    createdAt: row.created_at,
-  }))
+  return (data ?? []).map(mapShareRow)
 }
 
 export async function deleteShareLink(userId: string, linkId: string) {

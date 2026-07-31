@@ -576,8 +576,11 @@ export function CollabBinderViewPage() {
             {saving ? 'Salvando…' : conflictNotice ? 'Conflito' : 'Ao vivo'}
           </span>
           {totalValueLabel && (
-            <span className="binder-total" title="Soma dos preços">
-              Total {totalValueLabel}
+            <span
+              className="binder-total"
+              title="Total estimado em BRL (conversão FX) — não é preço do mercado brasileiro"
+            >
+              Total estimado {totalValueLabel}
             </span>
           )}
           <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)}>

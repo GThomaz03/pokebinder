@@ -166,7 +166,7 @@ export function CardDetailsModal({
           </header>
 
           <section>
-            <h3>Preços de mercado</h3>
+            <h3>Preços estimados (BRL)</h3>
             <ul className="price-rows">
               {variants.map((v) => (
                 <li key={v.key}>
@@ -179,7 +179,8 @@ export function CardDetailsModal({
               ))}
             </ul>
             <p className="note">
-              Near Mint · convertido para R$ ({marketLabel(settings.priceMarket)})
+              Near Mint · estimado em R$ via câmbio ({marketLabel(settings.priceMarket)}) — não
+              reflete necessariamente o preço no Brasil.
             </p>
           </section>
 

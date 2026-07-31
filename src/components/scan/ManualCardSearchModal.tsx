@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { searchCards } from '../../api/tcgdex'
+import { searchCardsRepo } from '../../api/cards/cardRepository'
 import { hydrateCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { LANG_OPTIONS } from '../../i18n'
@@ -43,6 +43,7 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Brief[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const reqId = useRef(0)
   const queryRef = useRef(query)
   queryRef.current = query
@@ -51,17 +52,20 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
     const q = nextQuery.trim()
     if (!q) {
       setResults([])
+      setSearchError(null)
       return
     }
     const id = ++reqId.current
     setLoading(true)
+    setSearchError(null)
     try {
-      const data = (await searchCards(nextLang, q)) as Brief[]
+      const data = (await searchCardsRepo(nextLang, q)) as Brief[]
       if (id !== reqId.current) return
       setResults(data)
     } catch {
       if (id !== reqId.current) return
       setResults([])
+      setSearchError('Catálogo indisponível no momento. Tente novamente.')
     } finally {
       if (id === reqId.current) setLoading(false)
     }
@@ -136,7 +140,8 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
         <div className="add-body">
           <div className="add-results" style={{ gridColumn: '1 / -1' }}>
             {loading && <p className="state">Buscando…</p>}
-            {!loading && results.length === 0 && (
+            {!loading && searchError && <p className="state error">{searchError}</p>}
+            {!loading && !searchError && results.length === 0 && (
               <p className="state">Busque por nome ou numeração. Ao fechar, o scan continua.</p>
             )}
             <div className="result-grid">
