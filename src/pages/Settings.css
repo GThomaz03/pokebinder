@@ -1,0 +1,77 @@
+.settings-page {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 36rem;
+}
+
+.settings-page-hero {
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  box-shadow: var(--shadow);
+}
+
+.settings-page-eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.settings-page-hero h1 {
+  margin: 0.25rem 0 0.4rem;
+}
+
+.settings-page-hero .muted {
+  margin: 0;
+}
+
+.settings-page-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1.1rem 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  box-shadow: var(--shadow);
+}
+
+.settings-page-card h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.settings-page-card .muted {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.settings-lang-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+
+.settings-sync-status {
+  margin: 0;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.settings-sync-status.is-syncing {
+  color: var(--accent);
+}
+
+.settings-sync-status.is-error {
+  color: var(--danger);
+}
+
+.settings-sync-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--danger);
+}

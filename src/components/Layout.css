@@ -102,6 +102,44 @@
   font-size: 0.82rem;
 }
 
+.topbar-avatar {
+  appearance: none;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  border-radius: var(--radius-page, 10px);
+  border: 1px solid var(--border-strong);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  color: var(--text);
+  font-weight: 800;
+  font-size: 0.72rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.topbar-avatar:hover {
+  border-color: var(--accent);
+}
+
+.topbar-avatar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.topbar-avatar.has-photo {
+  background: var(--surface);
+}
+
+.topbar-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .cloud-hint {
   padding: 0.55rem 1.25rem;
   font-size: 0.82rem;

@@ -1,11 +1,38 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { getMyProfile, initials, type Profile } from '../lib/social'
 import { useAuth } from '../hooks/useAuth'
 import { useCloudSync } from '../hooks/useCloudSync'
+import { AccountDrawer } from './AccountDrawer'
 import './Layout.css'
 
 export function Layout() {
   const { user, isAuthenticated, openAuth, signOut, isConfigured } = useAuth()
   const { syncing, lastSyncError, cloudReady, retrySync } = useCloudSync()
+  const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [profile, setProfile] = useState<Profile | null>(null)
+
+  const loadProfile = useCallback(async () => {
+    if (!user) {
+      setProfile(null)
+      return
+    }
+    try {
+      setProfile(await getMyProfile(user.id))
+    } catch {
+      setProfile(null)
+    }
+  }, [user])
+
+  useEffect(() => {
+    void loadProfile()
+  }, [loadProfile, location.pathname])
+
+  useEffect(() => {
+    if (!menuOpen || !user) return
+    void loadProfile()
+  }, [menuOpen, user, loadProfile])
 
   const syncLabel = syncing
     ? 'Sincronizando…'
@@ -14,6 +41,11 @@ export function Layout() {
       : cloudReady
         ? 'Sincronizado'
         : 'Conta'
+
+  const avatarUrl = profile?.avatarUrl
+  const avatarLabel = profile
+    ? initials(profile)
+    : (user?.email?.slice(0, 2) ?? '?').toUpperCase()
 
   return (
     <div className="app-shell">
@@ -30,39 +62,22 @@ export function Layout() {
           <NavLink to="/decks">Decks</NavLink>
           <NavLink to="/repository">Repositório</NavLink>
           <NavLink to="/calculadora">Calculadora</NavLink>
-          {isAuthenticated && (
-            <>
-              <NavLink to="/amigos">Amigos</NavLink>
-              <NavLink to="/perfil">Perfil</NavLink>
-            </>
-          )}
+          {isAuthenticated && <NavLink to="/amigos">Amigos</NavLink>}
         </nav>
 
         <div className="topbar-end">
           {isConfigured && (
             <div className="auth-controls">
               {isAuthenticated ? (
-                <>
-                  <span
-                    className={`auth-status${lastSyncError ? ' is-error' : ''}${syncing ? ' is-syncing' : ''}`}
-                    title={lastSyncError ?? user?.email ?? undefined}
-                  >
-                    {syncLabel}
-                  </span>
-                  {lastSyncError && (
-                    <button
-                      type="button"
-                      className="btn ghost auth-btn"
-                      onClick={() => retrySync()}
-                      title={lastSyncError}
-                    >
-                      Tentar de novo
-                    </button>
-                  )}
-                  <button type="button" className="btn ghost auth-btn" onClick={() => void signOut()}>
-                    Sair
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className={`topbar-avatar${avatarUrl ? ' has-photo' : ''}`}
+                  onClick={() => setMenuOpen(true)}
+                  aria-label="Abrir menu da conta"
+                  title={profile?.displayName || user?.email || 'Conta'}
+                >
+                  {avatarUrl ? <img src={avatarUrl} alt="" /> : avatarLabel}
+                </button>
               ) : (
                 <button
                   type="button"
@@ -87,6 +102,18 @@ export function Layout() {
       <main className="main">
         <Outlet />
       </main>
+
+      <AccountDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        profile={profile}
+        email={user?.email}
+        syncLabel={syncLabel}
+        syncing={syncing}
+        syncError={lastSyncError}
+        onRetrySync={retrySync}
+        onSignOut={() => void signOut()}
+      />
     </div>
   )
 }
