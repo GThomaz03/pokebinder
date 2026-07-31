@@ -205,11 +205,13 @@ export function FriendsPage() {
                     {p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(p)}
                   </span>
                   <span>
-                    <strong>{p.displayName || p.username}</strong>
+                    <span className="friends-name-line">
+                      <strong>{p.displayName || p.username}</strong>
+                      {followerIds.has(p.id) && (
+                        <span className="friends-badge">Te segue</span>
+                      )}
+                    </span>
                     {p.username && <small>@{p.username}</small>}
-                    {followerIds.has(p.id) && (
-                      <span className="friends-badge">Te segue</span>
-                    )}
                   </span>
                 </Link>
                 {user && p.id !== user.id && (
@@ -264,9 +266,11 @@ export function FriendsPage() {
                         {p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(p)}
                       </span>
                       <span>
-                        <strong>{p.displayName || p.username}</strong>
+                        <span className="friends-name-line">
+                          <strong>{p.displayName || p.username}</strong>
+                          <span className="friends-badge">Te segue</span>
+                        </span>
                         {p.username && <small>@{p.username}</small>}
-                        <span className="friends-badge">Te segue</span>
                       </span>
                     </Link>
                     <button
@@ -305,11 +309,13 @@ export function FriendsPage() {
                       {p.avatarUrl ? <img src={p.avatarUrl} alt="" /> : initials(p)}
                     </span>
                     <span>
-                      <strong>{p.displayName || p.username}</strong>
+                      <span className="friends-name-line">
+                        <strong>{p.displayName || p.username}</strong>
+                        {followerIds.has(p.id) && (
+                          <span className="friends-badge">Te segue</span>
+                        )}
+                      </span>
                       {p.username && <small>@{p.username}</small>}
-                      {followerIds.has(p.id) && (
-                        <span className="friends-badge">Te segue</span>
-                      )}
                     </span>
                   </Link>
                   <button

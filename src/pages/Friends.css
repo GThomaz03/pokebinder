@@ -119,18 +119,26 @@
 }
 
 .friends-row strong {
-  display: block;
+  display: inline;
+}
+
+.friends-name-line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .friends-row small {
+  display: block;
   color: var(--muted);
   font-size: 0.78rem;
 }
 
 .friends-badge {
   display: inline-block;
-  margin-top: 0.2rem;
-  margin-right: 0.35rem;
+  flex-shrink: 0;
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.04em;
