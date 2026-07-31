@@ -43,6 +43,35 @@
   font-size: 1.05rem;
 }
 
+.friends-search-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.friends-search-row .friends-add {
+  min-width: 0;
+}
+
+.friends-lists-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.friends-lists-row .friends-following {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .friends-search-row,
+  .friends-lists-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .friends-form {
   display: flex;
   gap: 0.5rem;
@@ -98,6 +127,21 @@
   font-size: 0.78rem;
 }
 
+.friends-badge {
+  display: inline-block;
+  margin-top: 0.2rem;
+  margin-right: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.4rem;
+  border-radius: var(--chip-radius, 4px);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
 .friends-avatar {
   width: 2.4rem;
   height: 2.4rem;
@@ -109,6 +153,18 @@
   background: color-mix(in srgb, var(--accent) 18%, var(--surface));
   border: 1px solid var(--border);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.friends-avatar--photo {
+  padding: 0;
+}
+
+.friends-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .friends-follow-btn {

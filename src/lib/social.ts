@@ -14,6 +14,9 @@ export type Profile = {
   friendCode: string | null
   bio: string | null
   avatarUrl: string | null
+  favoriteCardId: string | null
+  favoriteCardName: string | null
+  favoriteCardImage: string | null
   isPublic: boolean
   createdAt: string
   updatedAt: string
@@ -33,6 +36,10 @@ export type ProfileUpdate = {
   displayName?: string
   username?: string
   bio?: string | null
+  avatarUrl?: string | null
+  favoriteCardId?: string | null
+  favoriteCardName?: string | null
+  favoriteCardImage?: string | null
   isPublic?: boolean
 }
 
@@ -49,6 +56,9 @@ function mapProfile(row: Record<string, unknown>): Profile {
     friendCode: (row.friend_code as string | null) ?? null,
     bio: (row.bio as string | null) ?? null,
     avatarUrl: (row.avatar_url as string | null) ?? null,
+    favoriteCardId: (row.favorite_card_id as string | null) ?? null,
+    favoriteCardName: (row.favorite_card_name as string | null) ?? null,
+    favoriteCardImage: (row.favorite_card_image as string | null) ?? null,
     isPublic: Boolean(row.is_public ?? true),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -68,7 +78,7 @@ function mapPublished(row: Record<string, unknown>): PublishedResource {
 }
 
 const PROFILE_COLS =
-  'id, display_name, username, friend_code, bio, avatar_url, is_public, created_at, updated_at'
+  'id, display_name, username, friend_code, bio, avatar_url, favorite_card_id, favorite_card_name, favorite_card_image, is_public, created_at, updated_at'
 
 export async function getMyProfile(userId: string): Promise<Profile | null> {
   const client = requireClient()
@@ -129,6 +139,10 @@ export async function updateMyProfile(userId: string, patch: ProfileUpdate): Pro
     payload.username = slug
   }
   if (patch.bio !== undefined) payload.bio = patch.bio?.trim() || null
+  if (patch.avatarUrl !== undefined) payload.avatar_url = patch.avatarUrl
+  if (patch.favoriteCardId !== undefined) payload.favorite_card_id = patch.favoriteCardId
+  if (patch.favoriteCardName !== undefined) payload.favorite_card_name = patch.favoriteCardName
+  if (patch.favoriteCardImage !== undefined) payload.favorite_card_image = patch.favoriteCardImage
   if (patch.isPublic !== undefined) payload.is_public = patch.isPublic
 
   const { data, error } = await client
@@ -142,6 +156,42 @@ export async function updateMyProfile(userId: string, patch: ProfileUpdate): Pro
     throw error
   }
   return mapProfile(data)
+}
+
+/** Upload avatar to Storage (`avatars/{userId}/avatar.ext`) and return public URL. */
+export async function uploadAvatar(userId: string, file: File): Promise<string> {
+  const client = requireClient()
+  if (!file.type.startsWith('image/')) throw new Error('Envie uma imagem (JPEG, PNG, WebP ou GIF).')
+  if (file.size > 2 * 1024 * 1024) throw new Error('A foto deve ter no máximo 2 MB.')
+
+  const ext =
+    file.type === 'image/png'
+      ? 'png'
+      : file.type === 'image/webp'
+        ? 'webp'
+        : file.type === 'image/gif'
+          ? 'gif'
+          : 'jpg'
+  const path = `${userId}/avatar.${ext}`
+
+  const { error: upErr } = await client.storage.from('avatars').upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+    cacheControl: '3600',
+  })
+  if (upErr) throw upErr
+
+  const { data } = client.storage.from('avatars').getPublicUrl(path)
+  // Bust CDN/browser cache after replace
+  return `${data.publicUrl}?t=${Date.now()}`
+}
+
+export async function clearAvatar(userId: string): Promise<void> {
+  const client = requireClient()
+  const { data: files } = await client.storage.from('avatars').list(userId)
+  if (files?.length) {
+    await client.storage.from('avatars').remove(files.map((f) => `${userId}/${f.name}`))
+  }
 }
 
 export async function searchProfiles(query: string, limit = 20): Promise<Profile[]> {
@@ -199,6 +249,28 @@ export async function listFollowing(userId: string): Promise<Profile[]> {
     .order('created_at', { ascending: false })
   if (error) throw error
   const ids = (rows ?? []).map((r) => r.following_id as string)
+  if (!ids.length) return []
+
+  const { data: profiles, error: pErr } = await client
+    .from('profiles')
+    .select(PROFILE_COLS)
+    .in('id', ids)
+  if (pErr) throw pErr
+
+  const byId = new Map((profiles ?? []).map((p) => [p.id as string, mapProfile(p)]))
+  return ids.map((id) => byId.get(id)).filter((p): p is Profile => Boolean(p))
+}
+
+/** People who follow `userId` (incoming follows). */
+export async function listFollowers(userId: string): Promise<Profile[]> {
+  const client = requireClient()
+  const { data: rows, error } = await client
+    .from('follows')
+    .select('follower_id, created_at')
+    .eq('following_id', userId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  const ids = (rows ?? []).map((r) => r.follower_id as string)
   if (!ids.length) return []
 
   const { data: profiles, error: pErr } = await client

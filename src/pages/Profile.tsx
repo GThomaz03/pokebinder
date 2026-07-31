@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AddCardsModal } from '../components/binder/AddCardsModal'
+import { CardImage } from '../components/CardImage'
+import { hydrateCard } from '../api/prices'
 import {
+  clearAvatar,
   followUser,
   getMyProfile,
   getProfileByUsername,
@@ -10,10 +14,12 @@ import {
   profileUrl,
   unfollowUser,
   updateMyProfile,
+  uploadAvatar,
   type Profile,
   type PublishedResource,
 } from '../lib/social'
 import { useAuth } from '../hooks/useAuth'
+import { useLanguage } from '../hooks/useLanguage'
 import './Profile.css'
 
 export function MyProfilePage() {
@@ -251,6 +257,48 @@ export function PublicProfilePage() {
   )
 }
 
+function ProfileAvatar({ profile }: { profile: Profile }) {
+  if (profile.avatarUrl) {
+    return (
+      <div className="profile-avatar profile-avatar--photo">
+        <img src={profile.avatarUrl} alt="" />
+      </div>
+    )
+  }
+  return (
+    <div className="profile-avatar" aria-hidden>
+      {initials(profile)}
+    </div>
+  )
+}
+
+function FavoriteCardPanel({ profile }: { profile: Profile }) {
+  const hasCard = Boolean(profile.favoriteCardId)
+  return (
+    <div className="profile-fav" aria-label="Carta favorita">
+      <span className="profile-fav-label">Carta favorita</span>
+      <div className={`profile-fav-frame${hasCard ? '' : ' profile-fav-frame--empty'}`}>
+        {hasCard ? (
+          <CardImage
+            src={profile.favoriteCardImage}
+            alt={profile.favoriteCardName ?? 'Carta favorita'}
+            quality="high"
+            cardId={profile.favoriteCardId ?? undefined}
+            cardName={profile.favoriteCardName ?? undefined}
+          />
+        ) : (
+          <span className="profile-fav-unknown" aria-hidden>
+            ?
+          </span>
+        )}
+      </div>
+      {hasCard && profile.favoriteCardName && (
+        <span className="profile-fav-name">{profile.favoriteCardName}</span>
+      )}
+    </div>
+  )
+}
+
 function ProfileHeader({
   profile,
   isOwn,
@@ -264,9 +312,7 @@ function ProfileHeader({
 }) {
   return (
     <header className="profile-hero">
-      <div className="profile-avatar" aria-hidden>
-        {initials(profile)}
-      </div>
+      <ProfileAvatar profile={profile} />
       <div className="profile-hero-copy">
         <p className="profile-eyebrow">{isOwn ? 'Seu perfil' : 'Treinador'}</p>
         <h1>{profile.displayName || profile.username || 'Sem nome'}</h1>
@@ -286,6 +332,7 @@ function ProfileHeader({
           {actions}
         </div>
       </div>
+      <FavoriteCardPanel profile={profile} />
     </header>
   )
 }
@@ -330,12 +377,54 @@ function ProfileEditModal({
   requireAuth: () => boolean
 }) {
   const { user } = useAuth()
+  const { lang } = useLanguage()
+  const fileRef = useRef<HTMLInputElement>(null)
+
   const [displayName, setDisplayName] = useState(profile.displayName ?? '')
   const [username, setUsername] = useState(profile.username ?? '')
   const [bio, setBio] = useState(profile.bio ?? '')
   const [isPublic, setIsPublic] = useState(profile.isPublic)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatarUrl)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [removeAvatar, setRemoveAvatar] = useState(false)
+  const [favId, setFavId] = useState<string | null>(profile.favoriteCardId)
+  const [favName, setFavName] = useState<string | null>(profile.favoriteCardName)
+  const [favImage, setFavImage] = useState<string | null>(profile.favoriteCardImage)
+  const [pickCard, setPickCard] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  function onAvatarChange(file: File | null) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('Envie uma imagem (JPEG, PNG, WebP ou GIF).')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError('A foto deve ter no máximo 2 MB.')
+      return
+    }
+    setError(null)
+    setRemoveAvatar(false)
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  async function onPickFavorite(cardIds: string[]) {
+    const id = cardIds[0]
+    if (!id) return
+    setPickCard(false)
+    try {
+      const card = await hydrateCard(lang, id)
+      setFavId(id)
+      setFavName(card?.name ?? id)
+      setFavImage(card?.image ?? null)
+    } catch {
+      setFavId(id)
+      setFavName(id)
+      setFavImage(null)
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -343,11 +432,23 @@ function ProfileEditModal({
     setBusy(true)
     setError(null)
     try {
+      let nextAvatar = profile.avatarUrl
+      if (removeAvatar) {
+        await clearAvatar(user.id)
+        nextAvatar = null
+      } else if (avatarFile) {
+        nextAvatar = await uploadAvatar(user.id, avatarFile)
+      }
+
       const updated = await updateMyProfile(user.id, {
         displayName,
         username,
         bio,
         isPublic,
+        avatarUrl: nextAvatar,
+        favoriteCardId: favId,
+        favoriteCardName: favName,
+        favoriteCardImage: favImage,
       })
       onSaved(updated)
     } catch (err) {
@@ -358,52 +459,136 @@ function ProfileEditModal({
   }
 
   return (
-    <div className="profile-modal-backdrop" role="presentation" onClick={onClose}>
-      <form
-        className="profile-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Editar perfil"
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => void onSubmit(e)}
-      >
-        <h2>Editar perfil</h2>
-        <label>
-          Nome
-          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-        </label>
-        <label>
-          Username
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            pattern="[a-zA-Z0-9_]{3,24}"
-            title="3–24 caracteres: letras, números ou _"
-            required
-          />
-        </label>
-        <label>
-          Bio
-          <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} maxLength={280} />
-        </label>
-        <label className="profile-check">
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-          />
-          Perfil público (visível pelo link e código)
-        </label>
-        {error && <p className="profile-error">{error}</p>}
-        <div className="profile-modal-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Cancelar
-          </button>
-          <button type="submit" className="btn primary" disabled={busy}>
-            {busy ? 'Salvando…' : 'Salvar'}
-          </button>
-        </div>
-      </form>
-    </div>
+    <>
+      {!pickCard && (
+      <div className="profile-modal-backdrop" role="presentation" onClick={onClose}>
+        <form
+          className="profile-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Editar perfil"
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={(e) => void onSubmit(e)}
+        >
+          <h2>Editar perfil</h2>
+
+          <div className="profile-edit-avatar">
+            <div className={`profile-avatar${avatarPreview ? ' profile-avatar--photo' : ''}`}>
+              {avatarPreview ? <img src={avatarPreview} alt="" /> : initials(profile)}
+            </div>
+            <div className="profile-edit-avatar-actions">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                hidden
+                onChange={(e) => onAvatarChange(e.target.files?.[0] ?? null)}
+              />
+              <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()}>
+                Escolher foto
+              </button>
+              {(avatarPreview || profile.avatarUrl) && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => {
+                    setAvatarFile(null)
+                    setAvatarPreview(null)
+                    setRemoveAvatar(true)
+                  }}
+                >
+                  Remover foto
+                </button>
+              )}
+              <span className="muted profile-hint">JPEG, PNG, WebP ou GIF · máx. 2 MB</span>
+            </div>
+          </div>
+
+          <div className="profile-edit-fav">
+            <span className="profile-edit-fav-title">Carta favorita</span>
+            <div className="profile-edit-fav-row">
+              <div className={`profile-fav-frame${favId ? '' : ' profile-fav-frame--empty'}`}>
+                {favId ? (
+                  <CardImage
+                    src={favImage}
+                    alt={favName ?? ''}
+                    quality="low"
+                    cardId={favId}
+                    cardName={favName ?? undefined}
+                  />
+                ) : (
+                  <span className="profile-fav-unknown" aria-hidden>
+                    ?
+                  </span>
+                )}
+              </div>
+              <div className="profile-edit-fav-actions">
+                <button type="button" className="btn ghost" onClick={() => setPickCard(true)}>
+                  {favId ? 'Trocar carta' : 'Escolher carta'}
+                </button>
+                {favId && (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      setFavId(null)
+                      setFavName(null)
+                      setFavImage(null)
+                    }}
+                  >
+                    Remover
+                  </button>
+                )}
+                {favName && <span className="muted">{favName}</span>}
+              </div>
+            </div>
+          </div>
+
+          <label>
+            Nome
+            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+          </label>
+          <label>
+            Username
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              pattern="[a-zA-Z0-9_]{3,24}"
+              title="3–24 caracteres: letras, números ou _"
+              required
+            />
+          </label>
+          <label>
+            Bio
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} maxLength={280} />
+          </label>
+          <label className="profile-check">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+            />
+            Perfil público (visível pelo link e código)
+          </label>
+          {error && <p className="profile-error">{error}</p>}
+          <div className="profile-modal-actions">
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn primary" disabled={busy}>
+              {busy ? 'Salvando…' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
+      )}
+
+      <AddCardsModal
+        open={pickCard}
+        onClose={() => setPickCard(false)}
+        onAdd={(ids) => void onPickFavorite(ids)}
+        replaceMode
+      />
+    </>
   )
 }
