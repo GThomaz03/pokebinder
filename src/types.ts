@@ -28,6 +28,8 @@ export type PokedexSlot = {
   ownedCardIds: string[]
   topCardId?: string
   pinned?: boolean
+  /** Wishlist: marked as obtained (default missing / grayscale) */
+  obtained?: boolean
 }
 
 export type Slot = null | CardSlot | PokedexSlot

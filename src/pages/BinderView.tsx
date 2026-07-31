@@ -435,7 +435,19 @@ export function BinderViewPage() {
               if (key) setDetailsKey(key)
             }}
             onPin={(ref) => togglePin(binder.id, ref)}
-            onMarkMissing={(ref) => markSlotMissing(binder.id, ref)}
+            onMarkMissing={(ref) => {
+              if (binder.kind === 'wishlist') {
+                const s = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
+                if (s?.type !== 'pokedex' || !s.topCardId) return
+                const nextObtained = !s.obtained
+                updatePokedexSlot(binder.id, ref.pageIndex, ref.slotIndex, {
+                  obtained: nextObtained,
+                })
+                if (nextObtained) ensureOwned(s.topCardId)
+                return
+              }
+              markSlotMissing(binder.id, ref)
+            }}
             onDetails={(ref) => {
               const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
               const key = slotDisplayCardId(slot ?? null)

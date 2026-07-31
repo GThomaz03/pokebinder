@@ -175,9 +175,9 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
         <section>
           <h3>Visibilidade</h3>
           <Toggle
-            label="Escurecer cartas faltantes"
-            checked={binder.settings.dimMissing}
-            onChange={(v) => updateSettings({ dimMissing: v })}
+            label="Ignorar efeito de faltante"
+            checked={!binder.settings.dimMissing}
+            onChange={(v) => updateSettings({ dimMissing: !v })}
           />
         </section>
 

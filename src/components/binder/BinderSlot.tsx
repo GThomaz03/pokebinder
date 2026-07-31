@@ -5,7 +5,6 @@ import { formatPrice, getCachedCard, getCachedPrice, hydrateCard } from '../../a
 import { baseCardId, parseOwnedKey } from '../../api/tcgdex'
 import { slotDragId, slotDropId, type SlotDragData, type SlotDropData } from '../../lib/binderDnd'
 import { CardImage } from '../CardImage'
-import { useInventory } from '../../hooks/useInventory'
 import { useLanguage } from '../../hooks/useLanguage'
 import { getPokedexName } from '../../lib/binderUtils'
 import {
@@ -98,7 +97,6 @@ export function BinderSlot({
   onDetails,
 }: Props) {
   const { lang } = useLanguage()
-  const { hasCard } = useInventory()
   const [tick, setTick] = useState(0)
   const [hovered, setHovered] = useState(false)
   const [tipBox, setTipBox] = useState<TipBox | null>(null)
@@ -235,17 +233,25 @@ export function BinderSlot({
     slot?.type === 'pokedex' && !slot.topCardId && slot.ownedCardIds.length === 0
   const cardMarkedMissing = slot?.type === 'card' && Boolean(slot.missing)
 
-  const wishlistDim =
+  const wishlistObtained =
     binder.kind === 'wishlist' &&
     slot?.type === 'pokedex' &&
     Boolean(slot.topCardId) &&
-    !hasCard(slot.topCardId!)
+    Boolean(slot.obtained)
 
+  const wishlistMissing =
+    binder.kind === 'wishlist' &&
+    slot?.type === 'pokedex' &&
+    Boolean(slot.topCardId) &&
+    !slot.obtained
+
+  // Visual only — never changes obtained/missing status on the slot
   const dim =
-    wishlistDim ||
-    cardMarkedMissing ||
-    (settings.dimMissing && isMissingPokedex) ||
-    (settings.dimMissing && slot === null)
+    settings.dimMissing &&
+    (wishlistMissing ||
+      cardMarkedMissing ||
+      isMissingPokedex ||
+      slot === null)
 
   const showBack =
     (settings.emptyAsCardBack && slot === null) ||
@@ -434,7 +440,25 @@ export function BinderSlot({
                 –
               </button>
             )}
-            {onMarkMissing && slot?.type === 'pokedex' && (
+            {onMarkMissing &&
+              slot?.type === 'pokedex' &&
+              binder.kind === 'wishlist' &&
+              Boolean(slot.topCardId) && (
+                <button
+                  type="button"
+                  title={
+                    wishlistObtained ? 'Marcar como faltante' : 'Marcar como obtida'
+                  }
+                  aria-label={
+                    wishlistObtained ? 'Marcar como faltante' : 'Marcar como obtida'
+                  }
+                  className={wishlistObtained ? 'active' : ''}
+                  onClick={() => run(onMarkMissing)}
+                >
+                  {wishlistObtained ? '–' : '✓'}
+                </button>
+              )}
+            {onMarkMissing && slot?.type === 'pokedex' && binder.kind !== 'wishlist' && (
               <button
                 type="button"
                 title="Marcar faltante"

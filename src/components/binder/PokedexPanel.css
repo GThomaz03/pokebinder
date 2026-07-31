@@ -271,19 +271,31 @@
 
 .actions button {
   appearance: none;
-  border: 0;
+  border: 1px solid var(--border-strong);
   border-radius: var(--btn-radius, 4px);
-  background: var(--primary);
-  color: var(--fab-fg, #fff);
+  background: transparent;
+  color: var(--text);
   font-size: 0.72rem;
   font-weight: 700;
   padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.actions button.ghost {
-  background: transparent;
-  border: 1px solid var(--border-strong);
+.actions button:hover {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border-strong));
   color: var(--text);
+}
+
+.actions button.is-on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--fab-fg, #fff);
+}
+
+.actions button.is-on:hover {
+  background: var(--primary-hover, var(--primary));
+  border-color: var(--primary-hover, var(--primary));
 }
 
 .state {

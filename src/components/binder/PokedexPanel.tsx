@@ -228,10 +228,20 @@ export function PokedexPanel({
                     </span>
                     <span className="variant-chip">{card.variantLabel}</span>
                     <div className="actions">
-                      <button type="button" onClick={() => toggleOwned(card.key)}>
+                      <button
+                        type="button"
+                        className={owned ? 'is-on' : ''}
+                        onClick={() => toggleOwned(card.key)}
+                        aria-pressed={owned}
+                      >
                         {owned ? ownLabelActive : ownLabel}
                       </button>
-                      <button type="button" className="ghost" onClick={() => setTop(card.key)}>
+                      <button
+                        type="button"
+                        className={isTop ? 'is-on' : ''}
+                        onClick={() => setTop(card.key)}
+                        aria-pressed={isTop}
+                      >
                         {isTop ? 'No topo' : 'Usar no topo'}
                       </button>
                     </div>

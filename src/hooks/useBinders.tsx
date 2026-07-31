@@ -375,6 +375,15 @@ export function BindersProvider({ children }: { children: ReactNode }) {
             if (next.topCardId && !next.ownedCardIds.includes(next.topCardId)) {
               next.ownedCardIds = [...next.ownedCardIds, next.topCardId]
             }
+            // Wishlist: new display card starts as missing unless explicitly obtained
+            if (
+              b.kind === 'wishlist' &&
+              patch.topCardId !== undefined &&
+              patch.topCardId !== s.topCardId &&
+              patch.obtained === undefined
+            ) {
+              next.obtained = false
+            }
             return next
           })
           return { ...p, slots }
@@ -393,7 +402,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
           ...p,
           slots: p.slots.map((s) =>
             s?.type === 'pokedex'
-              ? { ...s, ownedCardIds: [], topCardId: undefined }
+              ? { ...s, ownedCardIds: [], topCardId: undefined, obtained: false }
               : s,
           ),
         }))

@@ -302,14 +302,30 @@ export function CollabBinderViewPage() {
     if (current && 'pinned' in current && current.pinned) return
     const item = tray.peekItem(trayItemId)
     if (!item || item.slot.type !== 'card') return
-    if (current === null) {
+
+    // Place on the exact drop target (swap if occupied), like solo binders.
+    if (current && current.type === 'card') {
       tray.takeItem(trayItemId)
-      placeCards(to, [item.slot.cardId])
+      tray.addSlot(current, {
+        binderId: binder!.id,
+        pageIndex: to.pageIndex,
+        slotIndex: to.slotIndex,
+      })
+      setSlot(to, {
+        type: 'card',
+        cardId: item.slot.cardId,
+        ...(currentUserId ? { placedBy: currentUserId } : {}),
+      })
       return
     }
-    // Occupied (unpinned): overflow to next empty instead of overwrite
+
     tray.takeItem(trayItemId)
-    placeCards(to, [item.slot.cardId])
+    setSlot(to, {
+      type: 'card',
+      cardId: item.slot.cardId,
+      ...(currentUserId ? { placedBy: currentUserId } : {}),
+      ...(item.slot.missing ? { missing: true } : {}),
+    })
   }
 
   async function toggleInviteLink() {
