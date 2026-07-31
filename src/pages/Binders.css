@@ -79,6 +79,11 @@
   color: var(--chrome);
 }
 
+.kind.repository {
+  background: color-mix(in srgb, var(--success, #1f7a4c) 22%, transparent);
+  color: var(--success, #1f7a4c);
+}
+
 .empty {
   text-align: center;
   color: var(--muted);

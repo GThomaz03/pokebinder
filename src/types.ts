@@ -2,7 +2,7 @@ export type CardLang = 'pt' | 'en' | 'ja'
 
 export type GridLayout = '2x2' | '3x3' | '4x3' | '4x4' | '4x5' | '5x4'
 
-export type BinderKind = 'custom' | 'pokedex' | 'wishlist'
+export type BinderKind = 'custom' | 'pokedex' | 'wishlist' | 'repository'
 
 export type PriceMarket = 'cardmarket' | 'tcgplayer'
 
@@ -46,6 +46,8 @@ export type BinderSettings = {
   dimMissing: boolean
   emptyAsCardBack: boolean
   missingAsCardBack: boolean
+  /** Repository binder: expand inventory qty into repeated slots */
+  showDuplicates?: boolean
 }
 
 export type Binder = {
@@ -173,6 +175,7 @@ export function defaultSettings(): BinderSettings {
     dimMissing: true,
     emptyAsCardBack: false,
     missingAsCardBack: false,
+    showDuplicates: false,
   }
 }
 

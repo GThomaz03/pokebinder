@@ -3,11 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ShareModal } from '../components/ShareModal'
 import { useAuth } from '../hooks/useAuth'
 import { useBinders } from '../hooks/useBinders'
+import { useInventory } from '../hooks/useInventory'
 import {
   createSharedBinder,
   listMySharedBinders,
   type SharedBinderRow,
 } from '../lib/collabBinders'
+import { inventoryCardCount } from '../lib/repositoryBinder'
 import {
   initials,
   listFollowing,
@@ -36,6 +38,7 @@ export function BindersPage() {
     createBinder,
     createWishlist,
     ensurePokedex,
+    ensureRepository,
     deleteBinder,
     renameBinder,
     progress,
@@ -73,8 +76,16 @@ export function BindersPage() {
     void refreshSocial()
   }, [refreshSocial, isAuthenticated])
 
+  const { entries } = useInventory()
+  const inventoryTotal = inventoryCardCount(entries)
+
   function onPokedex() {
     const binder = ensurePokedex()
+    navigate(`/binders/${binder.id}`)
+  }
+
+  function onRepository() {
+    const binder = ensureRepository()
     navigate(`/binders/${binder.id}`)
   }
 
@@ -167,6 +178,9 @@ export function BindersPage() {
           <button type="button" className="btn ghost" onClick={onPokedex}>
             Abrir Pokédex
           </button>
+          <button type="button" className="btn ghost" onClick={onRepository}>
+            Abrir Repositório
+          </button>
           <button
             type="button"
             className="btn ghost"
@@ -243,9 +257,13 @@ export function BindersPage() {
                 ? prog.total
                   ? Math.round((prog.owned / prog.total) * 100)
                   : 0
-                : prog.slots
-                  ? Math.round((prog.filled / prog.slots) * 100)
-                  : 0
+                : b.kind === 'repository'
+                  ? inventoryTotal > 0
+                    ? 100
+                    : 0
+                  : prog.slots
+                    ? Math.round((prog.filled / prog.slots) * 100)
+                    : 0
             const publishedOnProfile = isPublished(b.id)
             return (
               <article key={b.id} className="binder-card">
@@ -259,11 +277,16 @@ export function BindersPage() {
                       ? 'Pokédex'
                       : b.kind === 'wishlist'
                         ? 'Desejada'
-                        : 'Personalizado'}
+                        : b.kind === 'repository'
+                          ? 'Repositório'
+                          : 'Personalizado'}
                   </span>
                   <h2>{b.name}</h2>
                   <p>
-                    {b.grid} · {b.pages.length} páginas
+                    {b.grid}
+                    {b.kind === 'repository'
+                      ? ` · ${inventoryTotal} cartas`
+                      : ` · ${b.pages.length} páginas`}
                     {publishedOnProfile ? ' · No perfil' : ''}
                   </p>
                   <div className="bar">
@@ -272,7 +295,9 @@ export function BindersPage() {
                   <span className="pct">
                     {b.kind === 'pokedex' || b.kind === 'wishlist'
                       ? `${prog.owned}/${prog.total} espécies`
-                      : `${prog.filled} cartas`}
+                      : b.kind === 'repository'
+                        ? `${inventoryTotal} cartas`
+                        : `${prog.filled} cartas`}
                   </span>
                 </button>
                 <div className="card-actions">
@@ -298,7 +323,7 @@ export function BindersPage() {
                   >
                     Renomear
                   </button>
-                  {b.kind !== 'pokedex' && (
+                  {b.kind !== 'pokedex' && b.kind !== 'repository' && (
                     <button
                       type="button"
                       className="delete"

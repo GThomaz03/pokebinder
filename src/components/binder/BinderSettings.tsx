@@ -174,11 +174,19 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
 
         <section>
           <h3>Visibilidade</h3>
-          <Toggle
-            label="Ignorar efeito de faltante"
-            checked={!binder.settings.dimMissing}
-            onChange={(v) => updateSettings({ dimMissing: !v })}
-          />
+          {binder.kind === 'repository' ? (
+            <Toggle
+              label="Mostrar cartas repetidas"
+              checked={Boolean(binder.settings.showDuplicates)}
+              onChange={(v) => updateSettings({ showDuplicates: v })}
+            />
+          ) : (
+            <Toggle
+              label="Ignorar efeito de faltante"
+              checked={!binder.settings.dimMissing}
+              onChange={(v) => updateSettings({ dimMissing: !v })}
+            />
+          )}
         </section>
 
         <section>

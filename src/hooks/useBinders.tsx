@@ -28,6 +28,7 @@ import {
   rebuildPagesForGrid,
   swapSlots,
 } from '../lib/binderUtils'
+import { createRepositoryBinder } from '../lib/repositoryBinder'
 import { saveUserBinders } from '../lib/cloudStorage'
 import { useDebouncedEffect } from '../lib/useDebouncedEffect'
 import { useAuth } from './useAuth'
@@ -41,6 +42,7 @@ type BindersContextValue = {
   createBinder: (name: string, grid?: GridLayout) => Binder
   createWishlist: (name: string, grid?: GridLayout) => Binder
   ensurePokedex: () => Binder
+  ensureRepository: () => Binder
   deleteBinder: (id: string) => void
   renameBinder: (id: string, name: string) => void
   updateSettings: (id: string, patch: Partial<BinderSettings>) => void
@@ -157,8 +159,36 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     return created
   }, [])
 
+  const ensureRepository = useCallback(() => {
+    let created: Binder | null = null
+    setBinders((prev) => {
+      const existing = prev.find((b) => b.kind === 'repository')
+      if (existing) {
+        created = existing
+        return prev
+      }
+      created = createRepositoryBinder('3x3')
+      return [created, ...prev]
+    })
+    if (!created) {
+      const fallback = createRepositoryBinder('3x3')
+      setBinders((prev) => {
+        if (prev.some((b) => b.kind === 'repository')) return prev
+        return [fallback, ...prev]
+      })
+      return fallback
+    }
+    return created
+  }, [])
+
   const deleteBinder = useCallback((id: string) => {
-    setBinders((prev) => prev.filter((b) => b.id !== id))
+    setBinders((prev) =>
+      prev.filter((b) => {
+        if (b.id !== id) return true
+        if (b.kind === 'pokedex' || b.kind === 'repository') return true
+        return false
+      }),
+    )
   }, [])
 
   const renameBinder = useCallback(
@@ -177,11 +207,14 @@ export function BindersProvider({ children }: { children: ReactNode }) {
 
   const setGrid = useCallback(
     (id: string, grid: GridLayout) => {
-      update(id, (b) => ({
-        ...b,
-        grid,
-        pages: rebuildPagesForGrid(b, grid),
-      }))
+      update(id, (b) => {
+        if (b.kind === 'repository') return { ...b, grid }
+        return {
+          ...b,
+          grid,
+          pages: rebuildPagesForGrid(b, grid),
+        }
+      })
     },
     [update],
   )
@@ -201,6 +234,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const addPages = useCallback(
     (id: string, count = 2) => {
       update(id, (b) => {
+        if (b.kind === 'pokedex' || b.kind === 'wishlist' || b.kind === 'repository') return b
         const pages = [...b.pages]
         for (let i = 0; i < count; i++) pages.push(createEmptyPage(b.grid))
         return { ...b, pages }
@@ -212,7 +246,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const removePage = useCallback(
     (id: string, pageIndex: number) => {
       update(id, (b) => {
-        if (b.kind === 'pokedex' || b.kind === 'wishlist') return b
+        if (b.kind === 'pokedex' || b.kind === 'wishlist' || b.kind === 'repository') return b
         if (b.pages.length <= 2) return b
         const pages = b.pages.filter((_, i) => i !== pageIndex)
         if (pages.length % 2 === 1) pages.push(createEmptyPage(b.grid))
@@ -226,7 +260,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     (id: string, fromIndex: number, toIndex: number) => {
       update(id, (b) => {
         if (fromIndex === toIndex) return b
-        if (b.kind === 'pokedex' || b.kind === 'wishlist') return b
+        if (b.kind === 'pokedex' || b.kind === 'wishlist' || b.kind === 'repository') return b
         const pages = [...b.pages]
         const [moved] = pages.splice(fromIndex, 1)
         if (!moved) return b
@@ -239,7 +273,10 @@ export function BindersProvider({ children }: { children: ReactNode }) {
 
   const swapSlot = useCallback(
     (id: string, from: SlotRef, to: SlotRef) => {
-      update(id, (b) => ({ ...b, pages: swapSlots(b.pages, from, to) }))
+      update(id, (b) => {
+        if (b.kind === 'repository') return b
+        return { ...b, pages: swapSlots(b.pages, from, to) }
+      })
     },
     [update],
   )
@@ -248,6 +285,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     (id: string, pageIndex: number, cardIds: string[]) => {
       let placed = 0
       update(id, (b) => {
+        if (b.kind === 'repository' || b.kind === 'pokedex' || b.kind === 'wishlist') return b
         const pages = b.pages.map((p) => ({ ...p, slots: [...p.slots] }))
         let remaining = [...cardIds]
         let pi = pageIndex
@@ -277,7 +315,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const clearPage = useCallback(
     (id: string, pageIndex: number) => {
       update(id, (b) => {
-        if (b.kind === 'pokedex' || b.kind === 'wishlist') return b
+        if (b.kind === 'pokedex' || b.kind === 'wishlist' || b.kind === 'repository') return b
         const pages = b.pages.map((p, i) =>
           i === pageIndex ? { ...p, slots: p.slots.map(() => null as Slot) } : p,
         )
@@ -290,7 +328,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const clearSlot = useCallback(
     (id: string, ref: SlotRef): Slot | null => {
       const binder = bindersRef.current.find((b) => b.id === id)
-      if (!binder) return null
+      if (!binder || binder.kind === 'repository') return null
       const removed = binder.pages[ref.pageIndex]?.slots[ref.slotIndex] ?? null
       update(id, (b) => {
         const pages = b.pages.map((p, pi) => {
@@ -320,6 +358,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const setSlot = useCallback(
     (id: string, ref: SlotRef, slot: Slot) => {
       update(id, (b) => {
+        if (b.kind === 'repository') return b
         const pages = b.pages.map((p, pi) => {
           if (pi !== ref.pageIndex) return p
           const slots = [...p.slots]
@@ -335,7 +374,12 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const takeSlot = useCallback(
     (id: string, ref: SlotRef): Slot | null => {
       const binder = bindersRef.current.find((b) => b.id === id)
-      if (!binder || binder.kind === 'pokedex' || binder.kind === 'wishlist') {
+      if (
+        !binder ||
+        binder.kind === 'pokedex' ||
+        binder.kind === 'wishlist' ||
+        binder.kind === 'repository'
+      ) {
         return null
       }
       const taken = binder.pages[ref.pageIndex]?.slots[ref.slotIndex] ?? null
@@ -415,6 +459,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const markSlotMissing = useCallback(
     (id: string, ref: SlotRef) => {
       update(id, (b) => {
+        if (b.kind === 'repository') return b
         const pages = b.pages.map((p, pi) => {
           if (pi !== ref.pageIndex) return p
           const slots = [...p.slots]
@@ -439,6 +484,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const togglePin = useCallback(
     (id: string, ref: SlotRef) => {
       update(id, (b) => {
+        if (b.kind === 'repository') return b
         const pages = b.pages.map((p, pi) => {
           if (pi !== ref.pageIndex) return p
           const slots = [...p.slots]
@@ -477,6 +523,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       createBinder,
       createWishlist,
       ensurePokedex,
+      ensureRepository,
       deleteBinder,
       renameBinder,
       updateSettings,
@@ -503,6 +550,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       createBinder,
       createWishlist,
       ensurePokedex,
+      ensureRepository,
       deleteBinder,
       renameBinder,
       updateSettings,

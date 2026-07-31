@@ -14,7 +14,12 @@ import { getCachedCard, hydrateCard } from '../api/prices'
 import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { CardImage } from '../components/CardImage'
 import { binderTotalBrl, getPokedexName } from '../lib/binderUtils'
-import type { SlotRef, ToolMode } from '../types'
+import {
+  buildRepositoryPages,
+  inventoryCardCount,
+  inventoryTotalBrl,
+} from '../lib/repositoryBinder'
+import type { Binder, SlotRef, ToolMode } from '../types'
 import { slotDisplayCardId } from '../types'
 import '../themes/binder-themes.css'
 import './BinderView.css'
@@ -35,12 +40,15 @@ export function BinderViewPage() {
     markSlotMissing,
     togglePin,
     reorderPages,
+    updateSettings,
+    setGrid,
+    renameBinder,
   } = useBinders()
-  const { ensureOwned, ensureOwnedMany } = useInventory()
+  const { ensureOwned, ensureOwnedMany, entries } = useInventory()
   const { lang } = useLanguage()
   const tray = useTray()
 
-  const binder = getBinder(id)
+  const storedBinder = getBinder(id)
   const [spreadIndex, setSpreadIndex] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -52,6 +60,21 @@ export function BinderViewPage() {
   const [detailsKey, setDetailsKey] = useState<string | null>(null)
   const [inspectRef, setInspectRef] = useState<SlotRef | null>(null)
   const [priceTick, setPriceTick] = useState(0)
+
+  const isRepository = storedBinder?.kind === 'repository'
+
+  const binder: Binder | undefined = useMemo(() => {
+    if (!storedBinder) return undefined
+    if (storedBinder.kind !== 'repository') return storedBinder
+    return {
+      ...storedBinder,
+      pages: buildRepositoryPages(
+        entries,
+        storedBinder.grid,
+        Boolean(storedBinder.settings.showDuplicates),
+      ),
+    }
+  }, [storedBinder, entries, priceTick])
 
   const overlayOpen =
     settingsOpen || addOpen || Boolean(dexEdit) || Boolean(detailsKey)
@@ -67,6 +90,24 @@ export function BinderViewPage() {
   useEffect(() => {
     if (spreadIndex !== safeSpread) setSpreadIndex(safeSpread)
   }, [spreadIndex, safeSpread])
+
+  // Hydrate inventory cards so repository sort by dexId / prices work
+  useEffect(() => {
+    if (!isRepository || entries.length === 0) return
+    let cancelled = false
+    const keys = entries.map((e) => e.key)
+    void Promise.all(
+      keys.slice(0, 200).map((key) => {
+        const { lang: keyLang } = parseOwnedKey(key)
+        return hydrateCard(keyLang ?? lang, key, Boolean(keyLang))
+      }),
+    ).then(() => {
+      if (!cancelled) setPriceTick((t) => t + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isRepository, entries, lang])
 
   const canPrevPage = safeSpread > 0
   const canExtendPages = binder?.kind === 'custom'
@@ -201,9 +242,18 @@ export function BinderViewPage() {
   const totalValueLabel = useMemo(() => {
     if (!binder) return null
     void priceTick
-    const total = binderTotalBrl(binder)
+    const total =
+      binder.kind === 'repository'
+        ? inventoryTotalBrl(entries, binder.settings.priceMarket)
+        : binderTotalBrl(binder)
     return total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-  }, [binder, priceTick])
+  }, [binder, priceTick, entries])
+
+  const inventoryCountLabel = useMemo(() => {
+    if (!binder || binder.kind !== 'repository') return null
+    const n = inventoryCardCount(entries)
+    return `${n} carta${n === 1 ? '' : 's'}`
+  }, [binder, entries])
 
   const inspectSlot = inspectRef && binder
     ? binder.pages[inspectRef.pageIndex]?.slots[inspectRef.slotIndex]
@@ -225,9 +275,11 @@ export function BinderViewPage() {
       ? 'Pokédex'
       : binder.kind === 'wishlist'
         ? 'Desejada'
-        : 'Personalizado'
+        : binder.kind === 'repository'
+          ? 'Repositório'
+          : 'Personalizado'
   const showBatch = toolMode === 'select' && selected.size > 0
-  const showTrayChrome = !overlayOpen
+  const showTrayChrome = !overlayOpen && binder.kind === 'custom'
 
   function jumpTo(ref: SlotRef) {
     setSpreadIndex(Math.floor(ref.pageIndex / 2))
@@ -295,6 +347,11 @@ export function BinderViewPage() {
         <h1>{binder.name}</h1>
         <div className="view-actions">
           <span className="kind-pill">{kindLabel}</span>
+          {inventoryCountLabel && (
+            <span className="binder-total" title="Quantidade total no inventário">
+              {inventoryCountLabel}
+            </span>
+          )}
           {totalValueLabel && (
             <span
               className="binder-total"
@@ -302,6 +359,11 @@ export function BinderViewPage() {
             >
               Total {totalValueLabel}
             </span>
+          )}
+          {binder.kind === 'repository' && (
+            <Link to="/repository" className="btn-ghost">
+              Editar quantidades
+            </Link>
           )}
           <button type="button" className="btn-ghost" onClick={() => setSettingsOpen(true)}>
             Configurações
@@ -392,7 +454,13 @@ export function BinderViewPage() {
             onDropTrayToSlot={placeFromTray}
             onLabelChange={(pageIndex, label) => setPageLabel(binder.id, pageIndex, label)}
             onDeletePage={(pageIndex) => {
-              if (binder.kind === 'pokedex' || binder.kind === 'wishlist') return
+              if (
+                binder.kind === 'pokedex' ||
+                binder.kind === 'wishlist' ||
+                binder.kind === 'repository'
+              ) {
+                return
+              }
               if (window.confirm('Limpar slots desta página?')) clearPage(binder.id, pageIndex)
             }}
             onSelect={toggleSelect}
@@ -401,6 +469,10 @@ export function BinderViewPage() {
               setInspectRef(ref)
               if (slot?.type === 'pokedex') {
                 setDexEdit(ref)
+                return
+              }
+              if (binder.kind === 'repository') {
+                if (slot?.type === 'card') setDetailsKey(slot.cardId)
                 return
               }
               if (binder.kind === 'custom') {
@@ -412,18 +484,26 @@ export function BinderViewPage() {
                 }
               }
             }}
-            onRemove={(ref) => clearSlot(binder.id, ref)}
-            onToTray={sendToTray}
-            onReplace={(ref) => {
-              const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
-              setInspectRef(ref)
-              if (slot?.type === 'pokedex') {
-                setDexEdit(ref)
-                return
-              }
-              setReplaceRef(ref)
-              setAddOpen(true)
-            }}
+            onRemove={
+              binder.kind === 'repository'
+                ? undefined
+                : (ref) => clearSlot(binder.id, ref)
+            }
+            onToTray={binder.kind === 'custom' ? sendToTray : undefined}
+            onReplace={
+              binder.kind === 'repository'
+                ? undefined
+                : (ref) => {
+                    const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
+                    setInspectRef(ref)
+                    if (slot?.type === 'pokedex') {
+                      setDexEdit(ref)
+                      return
+                    }
+                    setReplaceRef(ref)
+                    setAddOpen(true)
+                  }
+            }
             onEdit={(ref) => {
               const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
               setInspectRef(ref)
@@ -434,8 +514,15 @@ export function BinderViewPage() {
               const key = slotDisplayCardId(slot ?? null)
               if (key) setDetailsKey(key)
             }}
-            onPin={(ref) => togglePin(binder.id, ref)}
-            onMarkMissing={(ref) => {
+            onPin={
+              binder.kind === 'repository'
+                ? undefined
+                : (ref) => togglePin(binder.id, ref)
+            }
+            onMarkMissing={
+              binder.kind === 'repository'
+                ? undefined
+                : (ref) => {
               if (binder.kind === 'wishlist') {
                 const s = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
                 if (s?.type !== 'pokedex' || !s.topCardId) return
@@ -447,7 +534,8 @@ export function BinderViewPage() {
                 return
               }
               markSlotMissing(binder.id, ref)
-            }}
+            }
+            }
             onDetails={(ref) => {
               const slot = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
               const key = slotDisplayCardId(slot ?? null)
@@ -549,6 +637,21 @@ export function BinderViewPage() {
         binder={binder}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        adapters={{
+          updateSettings: (patch) => updateSettings(binder.id, patch),
+          setGrid: (grid) => setGrid(binder.id, grid),
+          addPages: (count) => addPages(binder.id, count),
+          renameBinder: (name) => renameBinder(binder.id, name),
+          progress: () => {
+            let filled = 0
+            let slots = 0
+            for (const p of binder.pages) {
+              slots += p.slots.length
+              filled += p.slots.filter(Boolean).length
+            }
+            return { owned: 0, total: 0, filled, slots }
+          },
+        }}
       />
 
       <AddCardsModal
