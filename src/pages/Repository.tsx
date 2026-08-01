@@ -273,7 +273,9 @@ export function RepositoryPage() {
         inventoryMode
         onClose={() => setAddOpen(false)}
         onAdd={(cardIds) => {
-          for (const id of cardIds) addQty(id, 1)
+          const counts = new Map<string, number>()
+          for (const id of cardIds) counts.set(id, (counts.get(id) ?? 0) + 1)
+          for (const [id, n] of counts) addQty(id, n)
         }}
       />
     </div>

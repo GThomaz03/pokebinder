@@ -8,7 +8,6 @@ import { ToolsSidebar } from '../components/binder/ToolsSidebar'
 import { CardImage } from '../components/CardImage'
 import { useAuth } from '../hooks/useAuth'
 import { useCollabBinder } from '../hooks/useCollabBinder'
-import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
 import { useTray } from '../hooks/useTray'
 import { getCachedCard, hydrateCard } from '../api/prices'
@@ -68,7 +67,6 @@ export function CollabBinderViewPage() {
     rename,
   } = useCollabBinder(id)
 
-  const { ensureOwned, ensureOwnedMany } = useInventory()
   const { lang } = useLanguage()
   const tray = useTray()
 
@@ -759,7 +757,6 @@ export function CollabBinderViewPage() {
               cardId: cardIds[0],
               ...(currentUserId ? { placedBy: currentUserId } : {}),
             })
-            ensureOwned(cardIds[0])
             setReplaceRef(null)
             setAddOpen(false)
             return
@@ -768,7 +765,6 @@ export function CollabBinderViewPage() {
             inspectRef ??
             ({ pageIndex: leftIndex, slotIndex: 0 } satisfies SlotRef)
           placeCards(preferred, cardIds)
-          ensureOwnedMany(cardIds)
           setAddOpen(false)
         }}
       />

@@ -22,9 +22,6 @@ type InventoryContextValue = {
   hasCard: (cardKey: string) => boolean
   setQty: (cardKey: string, qty: number) => void
   addQty: (cardKey: string, delta?: number) => void
-  /** Ensure at least 1 when marked owned in a binder */
-  ensureOwned: (cardKey: string) => void
-  ensureOwnedMany: (cardKeys: string[]) => void
   entries: { key: string; qty: number }[]
   setProgress: Record<string, { owned: number; total: number }>
 }
@@ -94,27 +91,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const ensureOwned = useCallback((cardKey: string) => {
-    setInventory((prev) => {
-      if ((prev[cardKey] ?? 0) >= 1) return prev
-      return { ...prev, [cardKey]: 1 }
-    })
-  }, [])
-
-  const ensureOwnedMany = useCallback((cardKeys: string[]) => {
-    setInventory((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const k of cardKeys) {
-        if ((next[k] ?? 0) < 1) {
-          next[k] = 1
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [])
-
   const entries = useMemo(
     () =>
       Object.entries(inventory)
@@ -142,8 +118,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       hasCard,
       setQty,
       addQty,
-      ensureOwned,
-      ensureOwnedMany,
       entries,
       setProgress,
     }),
@@ -153,8 +127,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       hasCard,
       setQty,
       addQty,
-      ensureOwned,
-      ensureOwnedMany,
       entries,
       setProgress,
     ],

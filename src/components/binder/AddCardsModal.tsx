@@ -56,12 +56,18 @@ export function AddCardsModal({
     lastSearch && lastSearch.lang === lang ? lastSearch.results : [],
   )
   const [selected, setSelected] = useState<Brief[]>([])
+  /** Quantities for inventory mode — default 1 per selected card. */
+  const [qtyById, setQtyById] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [addToCurrent, setAddToCurrent] = useState(true)
   const reqId = useRef(0)
   const queryRef = useRef(query)
   queryRef.current = query
+
+  const totalCopies = inventoryMode
+    ? selected.reduce((sum, c) => sum + (qtyById[c.id] ?? 1), 0)
+    : selected.length
 
   async function runSearch(nextQuery: string, nextLang: CardLang) {
     const q = nextQuery.trim()
@@ -104,9 +110,9 @@ export function AddCardsModal({
   useEffect(() => {
     if (!open) {
       setSelected([])
+      setQtyById({})
       return
     }
-    // Restore cache for same lang, otherwise re-run with current query.
     if (lastSearch && lastSearch.lang === lang) {
       setQuery(lastSearch.query)
       setResults(lastSearch.results)
@@ -132,17 +138,43 @@ export function AddCardsModal({
   function toggleSelect(card: Brief) {
     setSelected((prev) => {
       if (prev.some((c) => c.id === card.id)) {
+        setQtyById((q) => {
+          const next = { ...q }
+          delete next[card.id]
+          return next
+        })
         return prev.filter((c) => c.id !== card.id)
       }
       seedCardBrief(card)
       void hydrateCard(lang, card.id)
+      if (inventoryMode) {
+        setQtyById((q) => ({ ...q, [card.id]: q[card.id] ?? 1 }))
+      }
       if (replaceMode) return [card]
       return [...prev, card]
     })
   }
 
+  function setQty(cardId: string, next: number) {
+    const clamped = Math.max(1, Math.min(99, Math.floor(next) || 1))
+    setQtyById((q) => ({ ...q, [cardId]: clamped }))
+  }
+
+  function bumpQty(cardId: string, delta: number) {
+    setQty(cardId, (qtyById[cardId] ?? 1) + delta)
+  }
+
   function confirm() {
-    onAdd(selected.map((c) => c.id))
+    if (inventoryMode) {
+      const ids: string[] = []
+      for (const c of selected) {
+        const n = qtyById[c.id] ?? 1
+        for (let i = 0; i < n; i++) ids.push(c.id)
+      }
+      onAdd(ids)
+    } else {
+      onAdd(selected.map((c) => c.id))
+    }
     onClose()
   }
 
@@ -203,6 +235,7 @@ export function AddCardsModal({
             <div className="result-grid">
               {results.map((card) => {
                 const isSel = selected.some((c) => c.id === card.id)
+                const qty = qtyById[card.id] ?? 1
                 return (
                   <article key={card.id} className={`result-item ${isSel ? 'selected' : ''}`}>
                     <CardImage
@@ -217,9 +250,39 @@ export function AddCardsModal({
                       <strong>{card.name}</strong>
                       <span>{setLabel(card)}</span>
                     </div>
-                    <button type="button" onClick={() => toggleSelect(card)}>
-                      {isSel ? 'Selecionada' : 'Adicionar'}
-                    </button>
+                    {inventoryMode && isSel ? (
+                      <div className="result-qty">
+                        <button
+                          type="button"
+                          aria-label="Diminuir quantidade"
+                          disabled={qty <= 1}
+                          onClick={() => bumpQty(card.id, -1)}
+                        >
+                          −
+                        </button>
+                        <span aria-live="polite">{qty}</span>
+                        <button
+                          type="button"
+                          aria-label="Aumentar quantidade"
+                          disabled={qty >= 99}
+                          onClick={() => bumpQty(card.id, 1)}
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          className="result-qty-remove"
+                          aria-label="Remover seleção"
+                          onClick={() => toggleSelect(card)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => toggleSelect(card)}>
+                        {isSel ? 'Selecionada' : 'Adicionar'}
+                      </button>
+                    )}
                   </article>
                 )
               })}
@@ -227,19 +290,46 @@ export function AddCardsModal({
           </div>
 
           <aside className="selected-panel">
-            <h3>Selecionadas ({selected.length})</h3>
+            <h3>
+              Selecionadas ({selected.length}
+              {inventoryMode && totalCopies !== selected.length ? ` · ${totalCopies} cópias` : ''})
+            </h3>
             {selected.length === 0 ? (
               <p className="state small">As cartas selecionadas aparecem aqui.</p>
             ) : (
               <ul>
-                {selected.map((c) => (
-                  <li key={c.id}>
-                    <span>{c.name}</span>
-                    <button type="button" onClick={() => toggleSelect(c)}>
-                      ×
-                    </button>
-                  </li>
-                ))}
+                {selected.map((c) => {
+                  const qty = qtyById[c.id] ?? 1
+                  return (
+                    <li key={c.id} className={inventoryMode ? 'has-qty' : undefined}>
+                      <span>{c.name}</span>
+                      {inventoryMode && (
+                        <div className="sel-qty">
+                          <button
+                            type="button"
+                            aria-label={`Diminuir ${c.name}`}
+                            disabled={qty <= 1}
+                            onClick={() => bumpQty(c.id, -1)}
+                          >
+                            −
+                          </button>
+                          <span>{qty}</span>
+                          <button
+                            type="button"
+                            aria-label={`Aumentar ${c.name}`}
+                            disabled={qty >= 99}
+                            onClick={() => bumpQty(c.id, 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => toggleSelect(c)} aria-label="Remover">
+                        ×
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </aside>
@@ -258,7 +348,9 @@ export function AddCardsModal({
           )}
           {replaceMode && <span className="state small">Selecione uma carta para o slot.</span>}
           {inventoryMode && !replaceMode && (
-            <span className="state small">As cartas entram no repositório com quantidade 1.</span>
+            <span className="state small">
+              Use + / − para definir quantas cópias de cada carta adicionar.
+            </span>
           )}
           <button
             type="button"
@@ -266,7 +358,11 @@ export function AddCardsModal({
             disabled={selected.length === 0}
             onClick={confirm}
           >
-            {replaceMode ? 'Trocar' : `Adicionar ${selected.length}`}
+            {replaceMode
+              ? 'Trocar'
+              : inventoryMode
+                ? `Adicionar ${totalCopies}`
+                : `Adicionar ${selected.length}`}
           </button>
         </footer>
       </div>

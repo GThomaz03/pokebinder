@@ -45,7 +45,7 @@ export function BinderViewPage() {
     setGrid,
     renameBinder,
   } = useBinders()
-  const { ensureOwned, ensureOwnedMany, entries } = useInventory()
+  const { entries } = useInventory()
   const { lang } = useLanguage()
   const tray = useTray()
 
@@ -538,7 +538,6 @@ export function BinderViewPage() {
                 updatePokedexSlot(binder.id, ref.pageIndex, ref.slotIndex, {
                   obtained: nextObtained,
                 })
-                if (nextObtained) ensureOwned(s.topCardId)
                 return
               }
               markSlotMissing(binder.id, ref)
@@ -672,12 +671,10 @@ export function BinderViewPage() {
         onAdd={(cardIds) => {
           if (replaceRef && cardIds[0]) {
             setSlot(binder.id, replaceRef, { type: 'card', cardId: cardIds[0] })
-            ensureOwned(cardIds[0])
             setReplaceRef(null)
             return
           }
           addCardsToPage(binder.id, leftIndex, cardIds)
-          ensureOwnedMany(cardIds)
         }}
       />
 
@@ -690,12 +687,6 @@ export function BinderViewPage() {
           onClose={() => setDexEdit(null)}
           onChange={(patch) => {
             updatePokedexSlot(binder.id, dexEdit.pageIndex, dexEdit.slotIndex, patch)
-            if (binder.kind !== 'wishlist' && patch.ownedCardIds) {
-              ensureOwnedMany(patch.ownedCardIds)
-            }
-            if (binder.kind !== 'wishlist' && patch.topCardId) {
-              ensureOwned(patch.topCardId)
-            }
           }}
         />
       )}
