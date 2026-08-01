@@ -24,7 +24,7 @@ export const API_CONFIG = {
     cardStaleTimeMs: 1000 * 60 * 60 * 24, // 24h
     priceStaleTimeMs: 1000 * 60 * 60, // 1h
     fxStaleTimeMs: 1000 * 60 * 60 * 6, // 6h
-    persistKey: 'pokebinder-rq-v1',
+    persistKey: 'pokebinder-rq-v2',
   },
   storageKeys: {
     cardsLegacy: 'pokebinder-cards-v1',

@@ -1,6 +1,6 @@
 import type { CachedCard, CardLang, CardPrice, PriceMarket } from '../../types'
 import { API_CONFIG } from '../config'
-import { getCardById } from '../cards/cardRepository'
+import { cardImageUrl } from '../images/imageProvider'
 import { getCachedFxRates, getFxRates, toBrl } from '../fx/fxProvider'
 import { baseCardId, parseOwnedKey } from '../cardKeys'
 import { createTcgdexPriceProvider, quoteFromPricing } from './tcgdexPriceProvider'
@@ -189,31 +189,52 @@ export async function hydrateCard(
   if (existing && !stale && !force && !parsed.lang && existing.image) return existing
 
   try {
-    const normalized = await getCardById(fetchLang, cardId)
-    if (!normalized) return existing ?? null
+    // Single REST fetch (avoids SDK localStorage quota crashes + double getCard for price)
+    let raw = (await getCard(fetchLang, cardId)) as
+      | {
+          id: string
+          name?: string
+          localId?: string | number
+          image?: string
+          set?: { id?: string; name?: string }
+          illustrator?: string
+          rarity?: string
+          types?: string[]
+          dexId?: number[]
+          pricing?: PriceQuoteOptions['pricingHint']
+        }
+      | undefined
+      | null
 
-    // Prefer EN art when locale has no image
-    let image = normalized.image
+    if (!raw && fetchLang !== 'en') {
+      raw = (await getCard('en', cardId)) as typeof raw
+    }
+    if (!raw?.id) return existing ?? null
+
+    let image = cardImageUrl(raw.image, 'high')
     if (!image && fetchLang !== 'en') {
-      const en = await getCardById('en', cardId)
-      image = en?.image
+      const en = (await getCard('en', cardId)) as { image?: string } | undefined
+      image = cardImageUrl(en?.image, 'high')
     }
     if (!image) image = existing?.image
 
-    const quote = await getPriceQuote(cardId, { lang: fetchLang, market: 'cardmarket' })
+    const quote = await quoteFromPricing(cardId, raw.pricing, {
+      lang: fetchLang,
+      market: 'cardmarket',
+    })
     const price = quoteToLegacyPrice(quote)
 
     const cached: CachedCard = {
-      id: normalized.id,
-      name: normalized.name || existing?.name || cardId,
-      localId: normalized.localId || existing?.localId || '',
+      id: String(raw.id),
+      name: raw.name || existing?.name || cardId,
+      localId: String(raw.localId ?? existing?.localId ?? ''),
       image,
-      setName: normalized.setName ?? existing?.setName,
-      setId: normalized.setId ?? existing?.setId,
-      illustrator: normalized.illustrator ?? existing?.illustrator,
-      rarity: normalized.rarity ?? existing?.rarity,
-      types: normalized.types ?? existing?.types,
-      dexId: normalized.dexId ?? existing?.dexId,
+      setName: raw.set?.name ?? existing?.setName,
+      setId: raw.set?.id ?? existing?.setId,
+      illustrator: raw.illustrator ?? existing?.illustrator,
+      rarity: raw.rarity ?? existing?.rarity,
+      types: raw.types ?? existing?.types,
+      dexId: raw.dexId ?? existing?.dexId,
       price,
     }
     cardCache = { ...cardCache, [cardId]: cached }

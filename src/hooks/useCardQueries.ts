@@ -23,12 +23,15 @@ export function useCard(lang: CardLang, cardId: string | undefined, enabled = tr
   return useQuery({
     queryKey: queryKeys.card(fetchLang, id ?? ''),
     queryFn: async () => {
-      if (!id) return null
-      // hydrateCard updates legacy localStorage caches used by binder totals
-      return hydrateCard(fetchLang, cardId!)
+      if (!id) throw new Error('card id required')
+      const card = await hydrateCard(fetchLang, cardId!)
+      // Throw so React Query retries instead of caching null as success
+      if (!card) throw new Error(`Card unavailable: ${id}`)
+      return card
     },
     enabled: Boolean(enabled && id),
     staleTime: API_CONFIG.cache.cardStaleTimeMs,
+    retry: 2,
   })
 }
 

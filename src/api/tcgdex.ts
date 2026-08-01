@@ -1,7 +1,7 @@
 import TCGdex, { Query } from '@tcgdex/sdk'
 import type { CardLang, CardPrice } from '../types'
 import { API_CONFIG } from './config'
-import { CatalogError, fetchJson, withRetry } from './cards/http'
+import { CatalogError, fetchJson } from './cards/http'
 import { baseCardId, parseOwnedKey } from './cardKeys'
 import {
   cardImageCandidates,
@@ -633,18 +633,37 @@ export async function fetchDeckCardMeta(
 
 export async function getCard(lang: CardLang, id: string) {
   const cardId = baseCardId(id)
+  // Prefer REST over the SDK here: @tcgdex/sdk writes every response to
+  // localStorage (`tcgdex-cache`). When the quota is full (common in prod with
+  // RQ persist + our own caches), `cache.set` throws AFTER a successful fetch
+  // and the whole call fails — slots then show no cards.
+  const langs: CardLang[] = lang === 'en' ? ['en'] : [lang, 'en']
+  for (const L of langs) {
+    try {
+      const card = await fetchJson<Record<string, unknown>>(
+        `${API_CONFIG.tcgdex.baseUrl}/${L}/cards/${cardId}`,
+        { maxRetries: 1 },
+      )
+      if (card?.id) return card
+    } catch (err) {
+      if (err instanceof CatalogError && err.status === 404) continue
+      /* try next lang / fall through */
+    }
+  }
+
+  // Last resort: SDK (may still fail if localStorage is full)
   try {
-    const card = await withRetry(async () => getClient(lang).card.get(cardId))
+    const card = await getClient(lang).card.get(cardId)
     if (card) return card
   } catch {
-    // missing in this locale
+    /* ignore */
   }
   if (lang !== 'en') {
     try {
-      const fallback = await withRetry(async () => getClient('en').card.get(cardId))
+      const fallback = await getClient('en').card.get(cardId)
       if (fallback) return fallback
     } catch {
-      // ignore
+      /* ignore */
     }
   }
   return undefined

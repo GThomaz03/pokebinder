@@ -47,7 +47,11 @@ if (persister) {
     dehydrateOptions: {
       shouldDehydrateQuery: (query) => {
         const key = query.queryKey[0]
-        return key === 'card' || key === 'price' || key === 'fx' || key === 'set-meta'
+        if (key !== 'card' && key !== 'price' && key !== 'fx' && key !== 'set-meta') {
+          return false
+        }
+        // Never persist empty/failed results — that froze prod slots for 24h staleTime
+        return query.state.status === 'success' && query.state.data != null
       },
     },
   })
