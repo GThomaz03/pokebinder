@@ -74,7 +74,8 @@
   box-shadow: var(--shadow);
 }
 
-.profile-fav-frame img {
+.profile-fav-frame img,
+.profile-fav-frame .card-img-root {
   width: 100%;
   height: 100%;
   object-fit: cover;

@@ -42,6 +42,15 @@ export type SetMeta = {
   serieName?: string
 }
 
+/** Brief card row from a set listing (`GET /sets/{id}` → cards[]). */
+export type SetCardBrief = {
+  id: string
+  name: string
+  localId: string
+  image?: string
+  setId?: string
+}
+
 export type CardVariant = {
   key: string
   cardId: string
@@ -103,6 +112,7 @@ export type CardProvider = {
   searchAdvanced(lang: CardLang, filters: CardSearchFilters): Promise<DeckSearchHit[]>
   listSets(lang: CardLang): Promise<Array<{ id: string; name: string }>>
   getSet(lang: CardLang, setId: string): Promise<SetMeta | null>
+  listSetCards(lang: CardLang, setId: string): Promise<SetCardBrief[]>
   fetchSpeciesVariants(
     lang: CardLang,
     dexId: number,

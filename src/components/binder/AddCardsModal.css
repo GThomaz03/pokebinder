@@ -309,6 +309,7 @@
 }
 
 .result-item img,
+.result-item .card-img-root,
 .result-item .ph {
   width: 100%;
   aspect-ratio: 63 / 88;

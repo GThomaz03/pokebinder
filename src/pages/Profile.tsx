@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
 import { CardImage } from '../components/CardImage'
+import { Skeleton } from '../components/Skeleton'
 import { hydrateCard } from '../api/prices'
 import {
   clearAvatar,
@@ -75,8 +76,13 @@ export function MyProfilePage() {
 
   if (loading) {
     return (
-      <div className="profile-page profile-page--state">
-        <p className="muted">Carregando perfil…</p>
+      <div className="profile-page profile-page--state" aria-busy aria-label="Carregando perfil">
+        <div className="sk-profile-block">
+          <Skeleton className="sk-avatar-lg" />
+          <Skeleton className="sk-line sk-line--title" style={{ width: '12rem' }} />
+          <Skeleton className="sk-line sk-line--meta" style={{ width: '8rem' }} />
+          <Skeleton className="sk-line" style={{ width: '100%', maxWidth: '28rem', height: '4rem' }} />
+        </div>
       </div>
     )
   }
@@ -213,8 +219,13 @@ export function PublicProfilePage() {
 
   if (loading) {
     return (
-      <div className="profile-page profile-page--state">
-        <p className="muted">Carregando…</p>
+      <div className="profile-page profile-page--state" aria-busy aria-label="Carregando perfil">
+        <div className="sk-profile-block">
+          <Skeleton className="sk-avatar-lg" />
+          <Skeleton className="sk-line sk-line--title" style={{ width: '12rem' }} />
+          <Skeleton className="sk-line sk-line--meta" style={{ width: '8rem' }} />
+          <Skeleton className="sk-line" style={{ width: '100%', maxWidth: '28rem', height: '4rem' }} />
+        </div>
       </div>
     )
   }

@@ -444,7 +444,14 @@ export function CardScannerPage() {
             const c = getCachedCard(h.cardId)
             return (
               <div key={`${h.cardId}-${h.at}`} className="scan-history-thumb">
-                {c?.image ? <CardImage src={c.image} alt="" quality="low" /> : <span />}
+                <CardImage
+                  src={c?.image}
+                  alt=""
+                  quality="low"
+                  cardId={h.cardId}
+                  cardName={c?.name}
+                  localId={c?.localId}
+                />
               </div>
             )
           })}
@@ -476,11 +483,14 @@ export function CardScannerPage() {
       {sheet && (
         <aside className="scan-sheet" aria-live="polite">
           <div className="scan-sheet-art">
-            {sheetCard?.image ? (
-              <CardImage src={sheetCard.image} alt="" quality="high" />
-            ) : (
-              <div className="scan-sheet-ph" />
-            )}
+            <CardImage
+              src={sheetCard?.image}
+              alt=""
+              quality="high"
+              cardId={sheet.cardId}
+              cardName={sheetCard?.name}
+              localId={sheetCard?.localId}
+            />
           </div>
           <div className="scan-sheet-body">
             <strong>{sheetCard?.name ?? sheet.cardId}</strong>

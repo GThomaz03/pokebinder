@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchSpeciesVariants, type CardVariantEntry } from '../../api/tcgdex'
 import { cacheVariantPrice, ESTIMATED_BRL_HINT, formatPrice, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
+import { CardSkeletonGrid } from '../Skeleton'
 import { useLanguage } from '../../hooks/useLanguage'
 import { getPokedexName } from '../../lib/binderUtils'
 import type { BinderSettings, CardLang, PokedexSlot } from '../../types'
@@ -178,11 +179,7 @@ export function PokedexPanel({
         </div>
 
         <div className="dex-modal-body">
-          {loading && (
-            <p className="state">
-              Buscando cartas {natLabel} e variantes (normal, holo, reverse…)…
-            </p>
-          )}
+          {loading && <CardSkeletonGrid count={12} />}
 
           {!loading && filtered.length === 0 && (
             <p className="state">
@@ -190,6 +187,7 @@ export function PokedexPanel({
             </p>
           )}
 
+          {!loading && (
           <div className="dex-grid">
             {filtered.map((card) => {
               const owned = slot.ownedCardIds.includes(card.key)
@@ -251,6 +249,7 @@ export function PokedexPanel({
               )
             })}
           </div>
+          )}
         </div>
       </div>
     </div>

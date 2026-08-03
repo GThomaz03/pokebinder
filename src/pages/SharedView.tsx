@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CardImage } from '../components/CardImage'
+import { Skeleton } from '../components/Skeleton'
 import { PageGrid } from '../components/binder/PageGrid'
 import { PageTurnNav } from '../components/binder/PageTurnNav'
 import { getCachedCard, getCachedPrice, hydrateCard, formatPrice } from '../api/prices'
@@ -53,8 +54,13 @@ export function SharedViewPage() {
 
   if (loading) {
     return (
-      <div className="shared-view shared-view--state">
-        <p className="shared-status">Carregando compartilhamento…</p>
+      <div className="shared-view shared-view--state" aria-busy aria-label="Carregando compartilhamento">
+        <div className="sk-page-block">
+          <Skeleton className="sk-line sk-line--title" style={{ width: '14rem' }} />
+          <Skeleton className="sk-line sk-line--meta" style={{ width: '10rem' }} />
+          <Skeleton className="sk-line" style={{ width: '100%', height: '12rem' }} />
+          <Skeleton className="sk-line" style={{ width: '100%', height: '8rem' }} />
+        </div>
       </div>
     )
   }

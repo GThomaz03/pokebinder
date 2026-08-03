@@ -396,6 +396,7 @@
 }
 
 .shared-slot img,
+.shared-slot .card-img-root,
 .shared-slot .ph {
   width: 100%;
   height: 100%;

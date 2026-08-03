@@ -6,6 +6,7 @@ import {
   setCachedImageUrl,
 } from '../api/imageCache'
 import { cardImageCandidates, inferMissingImageCandidates } from '../api/images/imageProvider'
+import './Skeleton.css'
 
 type Props = {
   /** Image base from TCGdex (`…/pt/ex/ex6/113`) or a full URL (`…/low.webp`) */
@@ -75,6 +76,7 @@ function normalizeImgSrc(url: string): string {
  * Card art with locale → English fallback, plus PokémonTCG.io / basic-energy
  * stand-ins when TCGdex omits `image` (common for Energy cards).
  * Successful URLs are cached so remounts don't re-walk failing candidates.
+ * Shows a shimmer skeleton until the active candidate finishes loading.
  */
 export function CardImage({
   src,
@@ -109,40 +111,62 @@ export function CardImage({
 
   const [index, setIndex] = useState(0)
   const [exhausted, setExhausted] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     setIndex(0)
     setExhausted(false)
+    setLoaded(false)
   }, [srcKey, quality, cardKey, cacheKey])
 
   const current = candidates[index]
 
+  useEffect(() => {
+    setLoaded(false)
+  }, [current])
+
+  const rootClass = [
+    'card-img-root',
+    className,
+    !current || exhausted ? 'is-empty' : '',
+    current && !exhausted && !loaded ? 'is-loading' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   if (!current || exhausted) {
-    return <span className={className ? `${className} ph` : 'ph'} aria-hidden />
+    return <span className={rootClass || 'card-img-root is-empty'} aria-hidden>
+      <span className="ph" />
+    </span>
   }
 
   return (
-    <img
-      // Remount per URL so an aborted previous load cannot fire onError on the next candidate.
-      key={current}
-      className={className}
-      src={current}
-      alt={alt}
-      loading={loading}
-      draggable={draggable}
-      onLoad={() => {
-        setCachedImageUrl(cacheKey, current)
-      }}
-      onError={(e) => {
-        const failed = normalizeImgSrc((e.currentTarget as HTMLImageElement).src)
-        const expected = normalizeImgSrc(current)
-        // Ignore stale/aborted errors that don't match the URL we intended to show.
-        if (failed !== expected) return
+    <span className={rootClass} aria-busy={!loaded}>
+      {!loaded && <span className="sk sk-fill" aria-hidden />}
+      <img
+        // Remount per URL so an aborted previous load cannot fire onError on the next candidate.
+        key={current}
+        className={`card-img-el${loaded ? ' is-shown' : ''}`}
+        src={current}
+        alt={alt}
+        loading={loading}
+        draggable={draggable}
+        onLoad={() => {
+          setLoaded(true)
+          setCachedImageUrl(cacheKey, current)
+        }}
+        onError={(e) => {
+          const failed = normalizeImgSrc((e.currentTarget as HTMLImageElement).src)
+          const expected = normalizeImgSrc(current)
+          // Ignore stale/aborted errors that don't match the URL we intended to show.
+          if (failed !== expected) return
 
-        clearCachedImageUrl(cacheKey, current)
-        if (index + 1 < candidates.length) setIndex(index + 1)
-        else setExhausted(true)
-      }}
-    />
+          clearCachedImageUrl(cacheKey, current)
+          setLoaded(false)
+          if (index + 1 < candidates.length) setIndex(index + 1)
+          else setExhausted(true)
+        }}
+      />
+    </span>
   )
 }

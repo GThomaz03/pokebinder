@@ -12,6 +12,7 @@ import {
   type Profile,
 } from '../lib/social'
 import { useAuth } from '../hooks/useAuth'
+import { Skeleton } from '../components/Skeleton'
 import './Friends.css'
 
 export function FriendsPage() {
@@ -249,7 +250,17 @@ export function FriendsPage() {
         <section className="friends-following">
           <h2>Seguidores {followers.length > 0 ? `(${followers.length})` : ''}</h2>
           {loading ? (
-            <p className="muted">Carregando…</p>
+            <div className="sk-friends-list" aria-busy aria-label="Carregando">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="sk-friends-row">
+                  <Skeleton className="sk-avatar-sm" />
+                  <div className="sk-result-meta">
+                    <Skeleton className="sk-line sk-line--title" />
+                    <Skeleton className="sk-line sk-line--meta" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : followers.length === 0 ? (
             <p className="muted">Ninguém te segue ainda. Compartilhe seu código de amigo!</p>
           ) : (
@@ -297,7 +308,17 @@ export function FriendsPage() {
         <section className="friends-following">
           <h2>Seguindo {following.length > 0 ? `(${following.length})` : ''}</h2>
           {loading ? (
-            <p className="muted">Carregando…</p>
+            <div className="sk-friends-list" aria-busy aria-label="Carregando">
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="sk-friends-row">
+                  <Skeleton className="sk-avatar-sm" />
+                  <div className="sk-result-meta">
+                    <Skeleton className="sk-line sk-line--title" />
+                    <Skeleton className="sk-line sk-line--meta" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : following.length === 0 ? (
             <p className="muted">Você ainda não segue ninguém. Peça o código de um amigo!</p>
           ) : (

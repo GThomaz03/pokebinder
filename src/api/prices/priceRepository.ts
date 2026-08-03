@@ -1,6 +1,6 @@
 import type { CachedCard, CardLang, CardPrice, PriceMarket } from '../../types'
 import { API_CONFIG } from '../config'
-import { cardImageUrl } from '../images/imageProvider'
+import { cardImageUrl, inferMissingImageCandidates } from '../images/imageProvider'
 import { getCachedFxRates, getFxRates, toBrl } from '../fx/fxProvider'
 import { baseCardId, parseOwnedKey } from '../cardKeys'
 import { createTcgdexPriceProvider, quoteFromPricing } from './tcgdexPriceProvider'
@@ -216,7 +216,14 @@ export async function hydrateCard(
       const en = (await getCard('en', cardId)) as { image?: string } | undefined
       image = cardImageUrl(en?.image, 'high')
     }
-    if (!image) image = existing?.image
+    if (!image) {
+      image =
+        inferMissingImageCandidates({
+          cardId,
+          name: raw.name || existing?.name,
+          localId: raw.localId ?? existing?.localId,
+        })[0] ?? existing?.image
+    }
 
     const quote = await quoteFromPricing(cardId, raw.pricing, {
       lang: fetchLang,

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CardImage } from '../components/CardImage'
+import { ResultRowSkeletonGrid } from '../components/Skeleton'
+import { baseCardId } from '../api/cardKeys'
 import {
   fetchDeckCardMetaRepo as fetchDeckCardMeta,
+  getCardById,
   searchCardsAdvancedRepo as searchCardsAdvanced,
   type DeckSearchHit,
 } from '../api/cards/cardRepository'
-import { seedCardBrief } from '../api/prices'
+import { getCachedCard, hydrateCard, seedCardBrief } from '../api/prices'
 import { useDecks } from '../hooks/useDecks'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
@@ -49,12 +52,119 @@ function matchesOwnFilter(
   return true
 }
 
+function normalizeDeckCategory(
+  raw?: string,
+): 'Pokemon' | 'Trainer' | 'Energy' | undefined {
+  const s = String(raw ?? '')
+  if (s === 'Trainer' || s === 'Treinador') return 'Trainer'
+  if (s === 'Energy' || s === 'Energia') return 'Energy'
+  if (s === 'Pokemon' || s === 'Pokémon') return 'Pokemon'
+  return undefined
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i]!)
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, items.length || 1))
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return results
+}
+
+function matchesOwnedLocalFilters(
+  hit: DeckSearchHit,
+  query: string,
+  category: '' | 'Pokemon' | 'Trainer' | 'Energy',
+  energyType: string,
+): boolean {
+  if (query) {
+    const q = query.toLowerCase()
+    const blob = `${hit.name} ${hit.localId} ${hit.setName ?? ''} ${hit.id}`.toLowerCase()
+    if (!blob.includes(q)) return false
+  }
+  if (category) {
+    const cat = normalizeDeckCategory(hit.category)
+    if (cat !== category) return false
+  }
+  if (energyType) {
+    const types = hit.types ?? []
+    const typeHit =
+      types.some((t) => t === energyType) ||
+      types.some((t) => typeLabelPt(t).toLowerCase() === typeLabelPt(energyType).toLowerCase())
+    if (typeHit) return true
+    const pt = typeLabelPt(energyType).toLowerCase()
+    const blob = `${hit.name} ${hit.energyType ?? ''}`.toLowerCase()
+    if (blob.includes(energyType.toLowerCase()) || blob.includes(pt)) return true
+    return false
+  }
+  return true
+}
+
+async function loadOwnedHit(
+  lang: Parameters<typeof getCardById>[0],
+  cardId: string,
+): Promise<DeckSearchHit> {
+  const id = baseCardId(cardId)
+  try {
+    const card = await getCardById(lang, id)
+    if (card) {
+      return {
+        id: card.id,
+        name: card.name,
+        localId: card.localId,
+        image: card.image,
+        category: normalizeDeckCategory(card.category) ?? card.category,
+        types: card.types,
+        setId: card.setId,
+        setName: card.setName,
+        energyType: card.energyType,
+        stage: card.stage,
+        rarity: card.rarity,
+        trainerType: card.trainerType,
+        regulationMark: card.regulationMark,
+        hp: card.hp,
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const cached = getCachedCard(id) ?? (await hydrateCard(lang, id))
+  if (cached) {
+    return {
+      id: cached.id,
+      name: cached.name,
+      localId: cached.localId,
+      image: cached.image,
+      types: cached.types,
+      setId: cached.setId,
+      setName: cached.setName,
+    }
+  }
+
+  const dash = id.lastIndexOf('-')
+  return {
+    id,
+    name: id,
+    localId: dash > 0 ? id.slice(dash + 1) : id,
+  }
+}
+
 export function DeckBuilderPage() {
   const { id = '' } = useParams()
   const { lang } = useLanguage()
   const { getDeck, addCard, setCardQty, removeCard, clearDeck, renameDeck, updateNotes, validate } =
     useDecks()
-  const { getQty, hasCard } = useInventory()
+  const { getQty, hasCard, entries } = useInventory()
 
   const deck = getDeck(id)
   const validation = validate(id)
@@ -65,6 +175,8 @@ export function DeckBuilderPage() {
   const [energyType, setEnergyType] = useState('')
   const [ownFilter, setOwnFilter] = useState<OwnFilter>('all')
   const [results, setResults] = useState<DeckSearchHit[]>([])
+  const [ownedCatalog, setOwnedCatalog] = useState<DeckSearchHit[]>([])
+  const [ownedCatalogReady, setOwnedCatalogReady] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(1)
@@ -75,6 +187,20 @@ export function DeckBuilderPage() {
   const [nameDraft, setNameDraft] = useState('')
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const loadingRef = useRef(false)
+
+  const ownedIds = useMemo(() => {
+    const seen = new Set<string>()
+    const ids: string[] = []
+    for (const { key, qty } of entries) {
+      if (qty <= 0) continue
+      const cardId = baseCardId(key)
+      if (seen.has(cardId)) continue
+      seen.add(cardId)
+      ids.push(cardId)
+    }
+    ids.sort((a, b) => a.localeCompare(b))
+    return ids
+  }, [entries])
 
   useEffect(() => {
     if (deck) {
@@ -88,14 +214,79 @@ export function DeckBuilderPage() {
     return () => window.clearTimeout(t)
   }, [query])
 
+  // Load full repository catalog when "Que eu tenho" is active.
+  useEffect(() => {
+    if (ownFilter !== 'owned') {
+      setOwnedCatalogReady(false)
+      return
+    }
+    let cancelled = false
+    setOwnedCatalogReady(false)
+    setLoading(true)
+    loadingRef.current = true
+
+    void mapPool(ownedIds, 6, (cardId) => loadOwnedHit(lang, cardId))
+      .then((hits) => {
+        if (cancelled) return
+        hits.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        setOwnedCatalog(hits)
+        setOwnedCatalogReady(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setOwnedCatalog([])
+        setOwnedCatalogReady(true)
+        setError('Não foi possível carregar as cartas do repositório.')
+      })
+      .finally(() => {
+        if (!cancelled) {
+          loadingRef.current = false
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [ownFilter, ownedIds, lang])
+
   useEffect(() => {
     setPage(1)
     setResults([])
     setHasMore(true)
-  }, [debouncedQuery, category, energyType, lang])
+  }, [debouncedQuery, category, energyType, lang, ownFilter])
 
   useEffect(() => {
     let cancelled = false
+
+    if (ownFilter === 'owned') {
+      if (!ownedCatalogReady) return
+      loadingRef.current = true
+      setLoading(true)
+      setError(null)
+
+      const filtered = ownedCatalog.filter((hit) =>
+        matchesOwnedLocalFilters(hit, debouncedQuery, category, energyType),
+      )
+      const slice = filtered.slice(0, page * PAGE_SIZE)
+      if (!cancelled) {
+        setResults(slice)
+        setHasMore(slice.length < filtered.length)
+        if (page === 1 && filtered.length === 0) {
+          setError(
+            ownedCatalog.length === 0
+              ? 'Nenhuma carta no repositório. Adicione cartas em Repositório primeiro.'
+              : 'Nenhuma carta do repositório combina com esses filtros.',
+          )
+        }
+        loadingRef.current = false
+        setLoading(false)
+      }
+      return () => {
+        cancelled = true
+      }
+    }
+
     loadingRef.current = true
     setLoading(true)
     setError(null)
@@ -135,14 +326,23 @@ export function DeckBuilderPage() {
     return () => {
       cancelled = true
     }
-  }, [debouncedQuery, category, energyType, lang, page])
+  }, [
+    debouncedQuery,
+    category,
+    energyType,
+    lang,
+    page,
+    ownFilter,
+    ownedCatalog,
+    ownedCatalogReady,
+  ])
 
   useEffect(() => {
     const node = sentinelRef.current
     if (!node) return
     const obs = new IntersectionObserver(
-      (entries) => {
-        const hit = entries.some((e) => e.isIntersecting)
+      (obsEntries) => {
+        const hit = obsEntries.some((e) => e.isIntersecting)
         if (!hit || !hasMore || loadingRef.current) return
         setPage((p) => p + 1)
       },
@@ -150,7 +350,7 @@ export function DeckBuilderPage() {
     )
     obs.observe(node)
     return () => obs.disconnect()
-  }, [hasMore, debouncedQuery, category, energyType, lang])
+  }, [hasMore, debouncedQuery, category, energyType, lang, ownFilter])
 
   const visibleCount = useMemo(
     () => results.filter((c) => matchesOwnFilter(c.id, ownFilter, hasCard)).length,
@@ -381,6 +581,10 @@ export function DeckBuilderPage() {
             </div>
 
             {error && results.length === 0 && <p className="search-error">{error}</p>}
+
+            {loading && results.length === 0 && !error && (
+              <ResultRowSkeletonGrid count={8} />
+            )}
 
             <div className="result-grid">
               {results

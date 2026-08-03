@@ -701,7 +701,14 @@ type FullCardLike = {
 }
 
 function expandCardVariants(card: FullCardLike): CardVariantEntry[] {
-  const image = cardImageUrl(card.image, 'high')
+  let image = cardImageUrl(card.image, 'high')
+  if (!image) {
+    image = inferMissingImageCandidates({
+      cardId: card.id,
+      name: card.name,
+      localId: card.localId,
+    })[0]
+  }
   const localId = String(card.localId)
   const setName = card.set?.name
   const setId = card.set?.id

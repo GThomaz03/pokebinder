@@ -148,8 +148,15 @@ export function CardDetailsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="details-art">
-          {cached?.image ? (
-            <CardImage src={cached.image} alt={cached.name} quality="high" />
+          {cached ? (
+            <CardImage
+              src={cached.image}
+              alt={cached.name}
+              quality="high"
+              cardId={cached.id}
+              cardName={cached.name}
+              localId={cached.localId}
+            />
           ) : (
             <div className="ph">Sem imagem</div>
           )}

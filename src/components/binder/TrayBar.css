@@ -107,6 +107,7 @@
 }
 
 .tray-thumb img,
+.tray-thumb .card-img-root,
 .tray-thumb .ph {
   width: 100%;
   height: 100%;

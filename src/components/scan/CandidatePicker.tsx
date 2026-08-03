@@ -25,7 +25,14 @@ export function CandidatePicker({ candidates, ocrRaw, onPick, onSearch, onDismis
           <li key={c.cardId}>
             <button type="button" className="scan-candidate-btn" onClick={() => onPick(c.cardId)}>
               <span className="scan-candidate-art">
-                {c.image ? <CardImage src={c.image} alt="" quality="low" /> : <span className="ph" />}
+                <CardImage
+                  src={c.image}
+                  alt=""
+                  quality="low"
+                  cardId={c.cardId}
+                  cardName={c.name}
+                  localId={c.localId}
+                />
               </span>
               <span className="scan-candidate-meta">
                 <strong>{c.name}</strong>

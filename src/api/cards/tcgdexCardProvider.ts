@@ -14,22 +14,32 @@ import {
   type DeckCardMeta,
   type DeckSearchHit,
 } from '../tcgdex'
-import { cardImageUrl } from '../images/imageProvider'
+import { cardImageUrl, inferMissingImageCandidates } from '../images/imageProvider'
 import type {
   CardProvider,
   CardVariant,
   NormalizedCard,
+  SetCardBrief,
   SetMeta,
 } from './types'
 
 function mapNormalized(lang: CardLang, raw: Record<string, unknown>): NormalizedCard {
   const imageBase = raw.image as string | undefined
+  let image = cardImageUrl(imageBase, 'high')
+  if (!image) {
+    image = inferMissingImageCandidates({
+      cardId: String(raw.id),
+      name: String(raw.name ?? ''),
+      localId: raw.localId as string | number | undefined,
+      energyType: raw.energyType as string | undefined,
+    })[0]
+  }
   return {
     id: String(raw.id),
     name: String(raw.name ?? ''),
     localId: String(raw.localId ?? ''),
     lang,
-    image: cardImageUrl(imageBase, 'high'),
+    image,
     imageBase,
     setId: (raw.set as { id?: string } | undefined)?.id,
     setName: (raw.set as { name?: string } | undefined)?.name,
@@ -112,6 +122,38 @@ export const tcgdexCardProvider: CardProvider = {
     } catch {
       if (lang !== 'en') return tcgdexCardProvider.getSet('en', setId)
       return null
+    }
+  },
+
+  async listSetCards(lang, setId) {
+    try {
+      const set = await getClient(lang).set.get(setId)
+      const cards = (set as { cards?: Array<{ id?: string; name?: string; localId?: string | number; image?: string }> } | null)
+        ?.cards
+      if (!cards?.length) {
+        if (lang !== 'en') return tcgdexCardProvider.listSetCards('en', setId)
+        return []
+      }
+      return cards
+        .filter((c) => c?.id)
+        .map((c): SetCardBrief => {
+          const id = String(c.id)
+          const name = String(c.name ?? '')
+          const localId = String(c.localId ?? '')
+          const imageBase = c.image
+          let image = cardImageUrl(imageBase, 'low')
+          if (!image) {
+            image = inferMissingImageCandidates({
+              cardId: id,
+              name,
+              localId,
+            })[0]
+          }
+          return { id, name, localId, image, setId }
+        })
+    } catch {
+      if (lang !== 'en') return tcgdexCardProvider.listSetCards('en', setId)
+      return []
     }
   },
 

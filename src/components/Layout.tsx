@@ -61,6 +61,7 @@ export function Layout() {
           </NavLink>
           <NavLink to="/decks">Decks</NavLink>
           <NavLink to="/repository">Repositório</NavLink>
+          <NavLink to="/pesquisa">Pesquisa</NavLink>
           <NavLink to="/calculadora">Calculadora</NavLink>
           {isAuthenticated && <NavLink to="/amigos">Amigos</NavLink>}
         </nav>

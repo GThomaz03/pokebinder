@@ -176,6 +176,7 @@
 }
 
 .b-slot-frame img,
+.b-slot-frame .card-img-root,
 .b-slot-frame .ph {
   width: 100%;
   height: 100%;

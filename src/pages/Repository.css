@@ -302,9 +302,19 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-page);
   padding: 0.65rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.repo-card:hover,
+.repo-card:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  outline: none;
 }
 
 .repo-card img,
+.repo-card .card-img-root,
 .repo-card .ph {
   width: 72px;
   aspect-ratio: 63 / 88;

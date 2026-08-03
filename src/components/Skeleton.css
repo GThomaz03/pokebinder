@@ -1,0 +1,236 @@
+@keyframes sk-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.sk {
+  display: block;
+  border-radius: var(--chip-radius, 4px);
+  background: linear-gradient(
+    110deg,
+    var(--slot) 0%,
+    var(--surface-2) 40%,
+    var(--slot) 80%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.15s ease-in-out infinite;
+}
+
+.sk-card {
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  border-radius: var(--slot-radius, 12px);
+}
+
+.sk-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.sk-card-cell {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.sk-line {
+  height: 0.7rem;
+  width: 70%;
+}
+
+.sk-line--title {
+  width: 85%;
+  height: 0.85rem;
+}
+
+.sk-line--meta {
+  width: 45%;
+  height: 0.65rem;
+}
+
+.sk-line--grow {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.sk-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.sk-set-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  padding: 0.75rem 0.8rem 0.7rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sk-set-top {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sk-chip {
+  width: 2.4rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+}
+
+.sk-set-body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.55rem;
+  align-items: center;
+  min-height: 3.25rem;
+}
+
+.sk-logo {
+  width: 70%;
+  height: 2.4rem;
+  border-radius: var(--btn-radius);
+}
+
+.sk-set-stats {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
+.sk-set-stats .sk-line {
+  width: 3.5rem;
+}
+
+.sk-bar {
+  height: 5px;
+  width: 100%;
+  border-radius: var(--chip-radius);
+}
+
+.sk-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.sk-result-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-page);
+  padding: 0.65rem;
+}
+
+.sk-result-thumb {
+  width: 72px;
+  border-radius: var(--slot-radius);
+}
+
+.sk-result-meta {
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* CardImage loading shell */
+.card-img-root {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: var(--slot);
+  border-radius: inherit;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.card-img-root.is-sized {
+  width: 100%;
+  aspect-ratio: 63 / 88;
+  height: auto;
+}
+
+.card-img-root .sk-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  margin: 0;
+}
+
+.card-img-root .card-img-el {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.card-img-root .card-img-el.is-shown {
+  opacity: 1;
+}
+
+.card-img-root > .ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 2rem;
+  background: var(--slot);
+}
+
+@media (max-width: 560px) {
+  .sk-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  }
+}
+
+.sk-profile-block {
+  display: grid;
+  gap: 0.65rem;
+  justify-items: start;
+  width: min(100%, 28rem);
+  margin: 2rem auto;
+}
+
+.sk-avatar-lg {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 999px;
+}
+
+.sk-avatar-sm {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.sk-friends-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sk-friends-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.sk-page-block {
+  display: grid;
+  gap: 0.75rem;
+  padding: 2rem 1rem;
+  max-width: 36rem;
+  margin: 0 auto;
+}

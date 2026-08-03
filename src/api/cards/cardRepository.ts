@@ -7,6 +7,7 @@ import type {
   DeckCardMeta,
   DeckSearchHit,
   NormalizedCard,
+  SetCardBrief,
   SetMeta,
 } from './types'
 import { tcgdexCardProvider } from './tcgdexCardProvider'
@@ -102,18 +103,94 @@ export async function getSetMeta(
   return req
 }
 
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i]!)
+    }
+  }
+  const n = Math.max(1, Math.min(concurrency, items.length || 1))
+  await Promise.all(Array.from({ length: n }, () => worker()))
+  return results
+}
+
 export async function getSetsMeta(
   lang: CardLang,
   setIds: string[],
+  concurrency = 8,
 ): Promise<Record<string, SetMeta>> {
   const unique = [...new Set(setIds.filter(Boolean))]
-  const results = await Promise.all(unique.map((id) => getSetMeta(lang, id)))
+  const results = await mapPool(unique, concurrency, (id) => getSetMeta(lang, id))
   const map: Record<string, SetMeta> = {}
   for (let i = 0; i < unique.length; i++) {
     const meta = results[i]
     if (meta) map[unique[i]!] = meta
   }
   return map
+}
+
+const setCardsCache = new Map<string, SetCardBrief[]>()
+const setCardsInflight = new Map<string, Promise<SetCardBrief[]>>()
+
+export async function listSetCardsRepo(
+  lang: CardLang,
+  setId: string,
+): Promise<SetCardBrief[]> {
+  const key = `${lang}:${setId}`
+  const hit = setCardsCache.get(key)
+  if (hit) return hit
+  const pending = setCardsInflight.get(key)
+  if (pending) return pending
+
+  const req = (async () => {
+    try {
+      const cards = await activeProvider.listSetCards(lang, setId)
+      setCardsCache.set(key, cards)
+      if (cards.length && lang !== 'en') setCardsCache.set(`en:${setId}`, cards)
+      return cards
+    } catch {
+      return []
+    } finally {
+      setCardsInflight.delete(key)
+    }
+  })()
+
+  setCardsInflight.set(key, req)
+  return req
+}
+
+/** All sets enriched with meta, newest releaseDate first. */
+export async function listAllSetsMeta(lang: CardLang): Promise<SetMeta[]> {
+  const briefs = await listSetsRepo(lang)
+  const map = await getSetsMeta(
+    lang,
+    briefs.map((s) => s.id),
+    8,
+  )
+  const rows: SetMeta[] = briefs.map(
+    (b) =>
+      map[b.id] ?? {
+        id: b.id,
+        name: b.name,
+        cardCount: 0,
+      },
+  )
+  rows.sort((a, b) => {
+    const ad = a.releaseDate ?? ''
+    const bd = b.releaseDate ?? ''
+    if (ad && bd) return bd.localeCompare(ad)
+    if (ad) return -1
+    if (bd) return 1
+    return a.name.localeCompare(b.name, 'pt-BR')
+  })
+  return rows
 }
 
 export async function fetchSpeciesVariantsRepo(
@@ -158,5 +235,6 @@ export type {
   DeckCardMeta,
   DeckSearchHit,
   NormalizedCard,
+  SetCardBrief,
   SetMeta,
 }

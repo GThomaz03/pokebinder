@@ -27,10 +27,13 @@
   padding: 1.25rem;
 }
 
-.details-art img {
+.details-art img,
+.details-art .card-img-root {
   width: min(100%, 340px);
   border-radius: 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  aspect-ratio: 63 / 88;
+  height: auto;
 }
 
 .details-art .ph {
@@ -175,7 +178,8 @@
     max-height: 94vh;
   }
 
-  .details-art img {
+  .details-art img,
+  .details-art .card-img-root {
     width: min(100%, 220px);
   }
 }

@@ -4,9 +4,11 @@ import { formatPrice, getCachedCard, hydrateCard } from '../api/prices'
 import { getSetsMeta, type SetMeta } from '../api/sets'
 import { baseCardId } from '../api/tcgdex'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
+import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { CardImage } from '../components/CardImage'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
+import { defaultSettings } from '../types'
 import './Repository.css'
 
 const PINNED_SETS_KEY = 'pokebinder-pinned-sets-v1'
@@ -42,9 +44,11 @@ export function RepositoryPage() {
   const [query, setQuery] = useState('')
   const [tick, setTick] = useState(0)
   const [addOpen, setAddOpen] = useState(false)
+  const [detailsKey, setDetailsKey] = useState<string | null>(null)
   const [setMeta, setSetMeta] = useState<Record<string, SetMeta>>({})
   const [pinnedIds, setPinnedIds] = useState<string[]>(loadPinned)
   const [expanded, setExpanded] = useState(false)
+  const detailsSettings = useMemo(() => defaultSettings(), [])
 
   useEffect(() => {
     let cancelled = false
@@ -236,8 +240,28 @@ export function RepositoryPage() {
           {filtered.map((e) => {
             const c = getCachedCard(baseCardId(e.key))
             return (
-              <article key={e.key} className="repo-card">
-                {c?.image ? <CardImage src={c.image} alt="" quality="high" /> : <div className="ph" />}
+              <article
+                key={e.key}
+                className="repo-card"
+                role="button"
+                tabIndex={0}
+                aria-label={`Ver detalhes de ${c?.name ?? e.key}`}
+                onClick={() => setDetailsKey(e.key)}
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Enter' || ev.key === ' ') {
+                    ev.preventDefault()
+                    setDetailsKey(e.key)
+                  }
+                }}
+              >
+                <CardImage
+                  src={c?.image}
+                  alt={c?.name ?? ''}
+                  quality="high"
+                  cardId={baseCardId(e.key)}
+                  cardName={c?.name}
+                  localId={c?.localId}
+                />
                 <div>
                   <strong>{c?.name ?? e.key}</strong>
                   <span>
@@ -247,7 +271,7 @@ export function RepositoryPage() {
                   <span className="price">
                     {c?.price ? formatPrice(c.price, 'cardmarket') : '—'}
                   </span>
-                  <div className="qty">
+                  <div className="qty" onClick={(ev) => ev.stopPropagation()}>
                     <button type="button" onClick={() => addQty(e.key, -1)}>
                       −
                     </button>
@@ -278,6 +302,16 @@ export function RepositoryPage() {
           for (const [id, n] of counts) addQty(id, n)
         }}
       />
+
+      {detailsKey && (
+        <CardDetailsModal
+          open
+          cardKey={detailsKey}
+          settings={detailsSettings}
+          ownedKeys={entries.map((e) => e.key)}
+          onClose={() => setDetailsKey(null)}
+        />
+      )}
     </div>
   )
 }

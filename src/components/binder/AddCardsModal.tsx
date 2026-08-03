@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { searchCardsRepo } from '../../api/cards/cardRepository'
 import { hydrateCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
+import { CardSkeletonGrid } from '../Skeleton'
 import { LANG_OPTIONS } from '../../i18n'
 import { useLanguage } from '../../hooks/useLanguage'
 import type { CardLang } from '../../types'
@@ -225,7 +226,8 @@ export function AddCardsModal({
 
         <div className="add-body">
           <div className="add-results">
-            {loading && <p className="state">Buscando…</p>}
+            {loading && results.length === 0 && <CardSkeletonGrid count={8} />}
+            {loading && results.length > 0 && <p className="state">Buscando…</p>}
             {!loading && searchError && <p className="state error">{searchError}</p>}
             {!loading && !searchError && results.length === 0 && (
               <p className="state">

@@ -10,6 +10,8 @@ import { LanguageProvider } from './hooks/useLanguage'
 import { TrayProvider } from './hooks/useTray'
 import { BinderViewPage } from './pages/BinderView'
 import { BindersPage } from './pages/Binders'
+import { BrowsePage } from './pages/Browse'
+import { BrowseSetPage } from './pages/BrowseSet'
 import { CollabBinderViewPage } from './pages/CollabBinderView'
 import { CollabJoinPage } from './pages/CollabJoinPage'
 import { DealCalculatorPage } from './pages/DealCalculator'
@@ -40,6 +42,8 @@ export default function App() {
                         <Route path="collab/:id" element={<CollabBinderViewPage />} />
                         <Route path="repository" element={<RepositoryPage />} />
                         <Route path="repository/scan" element={<Navigate to="/repository" replace />} />
+                        <Route path="pesquisa" element={<BrowsePage />} />
+                        <Route path="pesquisa/:setId" element={<BrowseSetPage />} />
                         <Route path="calculadora" element={<DealCalculatorPage />} />
                         <Route path="decks" element={<DecksPage />} />
                         <Route path="decks/:id" element={<DeckBuilderPage />} />

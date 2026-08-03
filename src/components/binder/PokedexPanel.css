@@ -178,7 +178,8 @@
   width: 100%;
 }
 
-.dex-art img {
+.dex-art img,
+.dex-art .card-img-root {
   width: 100%;
   height: 100%;
   object-fit: cover;
