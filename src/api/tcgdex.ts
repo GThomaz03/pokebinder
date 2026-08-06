@@ -158,7 +158,7 @@ async function listAllByDexId(dexId: number): Promise<CardBrief[]> {
   for (let page = 1; page <= 40; page++) {
     try {
       const batch = (await sdk.card.list(
-        Query.create().equal('dexId', dexId).paginate(page, 100),
+        Query.create().equal('dexId', String(dexId)).paginate(page, 100),
       )) as CardBrief[]
       if (!batch.length) break
       all.push(...batch)

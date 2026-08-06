@@ -161,8 +161,10 @@ export function BindersPage() {
         .finally(() => setCollabBusy(false))
       return
     }
-    renameBinder(modal.id, trimmed)
-    setModal(null)
+    if (modal.mode === 'rename') {
+      renameBinder(modal.id, trimmed)
+      setModal(null)
+    }
   }
 
   function isPublished(binderId: string) {

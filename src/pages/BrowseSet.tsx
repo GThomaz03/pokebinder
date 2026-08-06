@@ -34,10 +34,10 @@ export function BrowseSetPage() {
     setLoading(true)
     setError(null)
     void Promise.all([getSetMeta(lang, setId), listSetCardsRepo(lang, setId)])
-      .then(([setMeta, setCards]) => {
+      .then(([nextMeta, nextCards]) => {
         if (cancelled) return
-        setMeta(setMeta)
-        setCards(setCards)
+        setMeta(nextMeta)
+        setCards(nextCards)
       })
       .catch(() => {
         if (!cancelled) setError('Não foi possível carregar as cartas desta coleção.')
