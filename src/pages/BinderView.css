@@ -69,6 +69,22 @@ button.btn-ghost.binder-home:disabled {
   color: var(--muted);
 }
 
+button.kind-pill--action {
+  appearance: none;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+button.kind-pill--action:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
 .binder-total {
   font-size: 0.8rem;
   font-weight: 700;

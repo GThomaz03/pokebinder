@@ -39,23 +39,34 @@ export function createCustomBinder(name: string, grid: GridLayout = '3x3'): Bind
 
 export function createPokedexBinder(
   grid: GridLayout = '3x3',
-  options?: { kind?: 'pokedex' | 'wishlist'; name?: string },
+  options?: {
+    kind?: 'pokedex' | 'wishlist'
+    name?: string
+    /** National dex IDs in slot order. Defaults to full National Dex. */
+    dexIds?: number[]
+  },
 ): Binder {
   const kind = options?.kind ?? 'pokedex'
   const perPage = slotsPerPage(grid)
   const pages: BinderPage[] = []
   let buffer: Slot[] = []
+  const dexIds = options?.dexIds?.length
+    ? options.dexIds
+    : POKEDEX.map((m) => m.id)
 
-  for (const mon of POKEDEX) {
+  for (let i = 0; i < dexIds.length; i++) {
+    const dexId = dexIds[i]!
     buffer.push({
       type: 'pokedex',
-      dexId: mon.id,
+      dexId,
       ownedCardIds: [],
     })
     if (buffer.length === perPage) {
+      const to = i + 1
+      const from = to - perPage + 1
       pages.push({
         id: uid('page'),
-        label: `#${String(mon.id - perPage + 1).padStart(3, '0')}–${String(mon.id).padStart(3, '0')}`,
+        label: `#${String(from).padStart(3, '0')}–${String(to).padStart(3, '0')}`,
         slots: buffer,
       })
       buffer = []
@@ -63,17 +74,12 @@ export function createPokedexBinder(
   }
 
   if (buffer.length > 0) {
+    const from = dexIds.length - buffer.length + 1
+    const to = dexIds.length
     while (buffer.length < perPage) buffer.push(null)
-    const first = (buffer.find((s) => s?.type === 'pokedex') as { dexId: number } | undefined)?.dexId
-    const last = [...buffer].reverse().find((s) => s?.type === 'pokedex') as
-      | { dexId: number }
-      | undefined
     pages.push({
       id: uid('page'),
-      label:
-        first && last
-          ? `#${String(first).padStart(3, '0')}–${String(last.dexId).padStart(3, '0')}`
-          : 'Pokédex',
+      label: `#${String(from).padStart(3, '0')}–${String(to).padStart(3, '0')}`,
       slots: buffer,
     })
   }
@@ -95,10 +101,15 @@ export function createPokedexBinder(
   }
 }
 
-export function createWishlistBinder(name: string, grid: GridLayout = '3x3'): Binder {
+export function createWishlistBinder(
+  name: string,
+  grid: GridLayout = '3x3',
+  dexIds?: number[],
+): Binder {
   return createPokedexBinder(grid, {
     kind: 'wishlist',
     name: name.trim() || 'Pokédex desejada',
+    dexIds,
   })
 }
 
@@ -107,36 +118,23 @@ export function rebuildPagesForGrid(binder: Binder, grid: GridLayout): BinderPag
   const pages: BinderPage[] = []
 
   if (binder.kind === 'pokedex' || binder.kind === 'wishlist') {
+    // Preserve creation order (regional / game templates are not national order).
     const pokedexSlots = binder.pages
       .flatMap((p) => p.slots)
       .filter((s): s is Extract<Slot, { type: 'pokedex' }> => s?.type === 'pokedex')
-      .sort((a, b) => a.dexId - b.dexId)
 
-    for (let i = 0; i < pokedexSlots.length; i += perPage) {
-      const chunk: Slot[] = pokedexSlots.slice(i, i + perPage)
-      while (chunk.length < perPage) chunk.push(null)
-      const first = pokedexSlots[i]?.dexId
-      const last = pokedexSlots[Math.min(i + perPage - 1, pokedexSlots.length - 1)]?.dexId
-      pages.push({
-        id: uid('page'),
-        label:
-          first && last
-            ? `#${String(first).padStart(3, '0')}–${String(last).padStart(3, '0')}`
-            : undefined,
-        slots: chunk,
-      })
-    }
-  } else {
-    const all = binder.pages.flatMap((p) => p.slots)
-    const target = Math.max(all.length, perPage * 2)
-    for (let i = 0; i < target; i += perPage) {
-      const chunk: Slot[] = all.slice(i, i + perPage)
-      while (chunk.length < perPage) chunk.push(null)
-      pages.push({
-        id: uid('page'),
-        slots: chunk,
-      })
-    }
+    return packPokedexPages(pokedexSlots, grid)
+  }
+
+  const all = binder.pages.flatMap((p) => p.slots)
+  const target = Math.max(all.length, perPage * 2)
+  for (let i = 0; i < target; i += perPage) {
+    const chunk: Slot[] = all.slice(i, i + perPage)
+    while (chunk.length < perPage) chunk.push(null)
+    pages.push({
+      id: uid('page'),
+      slots: chunk,
+    })
   }
 
   if (pages.length === 0) {
@@ -146,6 +144,74 @@ export function rebuildPagesForGrid(binder: Binder, grid: GridLayout): BinderPag
   }
 
   return pages
+}
+
+/** Flat Pokédex slots in binder order (skips null padding). */
+export function listPokedexSlots(binder: Binder): Extract<Slot, { type: 'pokedex' }>[] {
+  return binder.pages
+    .flatMap((p) => p.slots)
+    .filter((s): s is Extract<Slot, { type: 'pokedex' }> => s?.type === 'pokedex')
+}
+
+/** Pack ordered Pokédex slots into pages with index-based labels. */
+export function packPokedexPages(
+  pokedexSlots: Extract<Slot, { type: 'pokedex' }>[],
+  grid: GridLayout,
+): BinderPage[] {
+  const perPage = slotsPerPage(grid)
+  const pages: BinderPage[] = []
+
+  for (let i = 0; i < pokedexSlots.length; i += perPage) {
+    const chunk: Slot[] = pokedexSlots.slice(i, i + perPage)
+    while (chunk.length < perPage) chunk.push(null)
+    const from = i + 1
+    const to = Math.min(i + perPage, pokedexSlots.length)
+    pages.push({
+      id: uid('page'),
+      label: `#${String(from).padStart(3, '0')}–${String(to).padStart(3, '0')}`,
+      slots: chunk,
+    })
+  }
+
+  if (pages.length === 0) {
+    pages.push(createEmptyPage(grid), createEmptyPage(grid))
+  } else if (pages.length % 2 === 1) {
+    pages.push(createEmptyPage(grid, 'Extra'))
+  }
+
+  return pages
+}
+
+/**
+ * Reorder Pokédex/wishlist slots by national dexId sequence.
+ * Slot data (owned cards, top card, etc.) moves with each species.
+ */
+export function reorderPokedexByDexIds(
+  binder: Binder,
+  orderedDexIds: number[],
+): BinderPage[] {
+  if (binder.kind !== 'pokedex' && binder.kind !== 'wishlist') return binder.pages
+
+  const current = listPokedexSlots(binder)
+  const remaining = new Map<number, Extract<Slot, { type: 'pokedex' }>[]>()
+  for (const s of current) {
+    const list = remaining.get(s.dexId) ?? []
+    list.push(s)
+    remaining.set(s.dexId, list)
+  }
+
+  const ordered: Extract<Slot, { type: 'pokedex' }>[] = []
+  for (const dexId of orderedDexIds) {
+    const list = remaining.get(dexId)
+    const next = list?.shift()
+    if (next) ordered.push(next)
+  }
+  // Keep any slots not mentioned (shouldn't happen) at the end
+  for (const list of remaining.values()) {
+    ordered.push(...list)
+  }
+
+  return packPokedexPages(ordered, binder.grid)
 }
 
 export function swapSlots(

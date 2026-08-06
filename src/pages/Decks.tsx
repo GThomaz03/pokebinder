@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShareModal } from '../components/ShareModal'
 import { useAuth } from '../hooks/useAuth'
@@ -28,6 +28,7 @@ export function DecksPage() {
   const [shareTarget, setShareTarget] = useState<Deck | null>(null)
   const [published, setPublished] = useState<PublishedResource[]>([])
   const [pubBusy, setPubBusy] = useState<string | null>(null)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
   const refreshPublished = useCallback(async () => {
     if (!user) {
@@ -44,6 +45,15 @@ export function DecksPage() {
   useEffect(() => {
     void refreshPublished()
   }, [refreshPublished])
+
+  useEffect(() => {
+    if (!menuOpenId) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpenId(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [menuOpenId])
 
   function submit(name: string) {
     if (!modal) return
@@ -120,7 +130,40 @@ export function DecksPage() {
             const ownPct = total > 0 ? Math.round((v.ownedNeeded / total) * 100) : 0
             const onProfile = isPublished(deck.id)
             return (
-              <article key={deck.id} className="deck-card">
+              <article
+                key={deck.id}
+                className={`deck-card${onProfile ? ' is-public' : ''}`}
+              >
+                {onProfile && (
+                  <span className="deck-public-badge" title="Visível no seu perfil">
+                    No perfil
+                  </span>
+                )}
+                <DeckCardMenu
+                  open={menuOpenId === deck.id}
+                  busy={pubBusy === deck.id}
+                  published={onProfile}
+                  onToggle={() =>
+                    setMenuOpenId(menuOpenId === deck.id ? null : deck.id)
+                  }
+                  onClose={() => setMenuOpenId(null)}
+                  onShare={() => {
+                    setMenuOpenId(null)
+                    setShareTarget(deck)
+                  }}
+                  onPublish={() => {
+                    setMenuOpenId(null)
+                    void togglePublish(deck)
+                  }}
+                  onRename={() => {
+                    setMenuOpenId(null)
+                    setModal({ mode: 'rename', id: deck.id, name: deck.name })
+                  }}
+                  onDelete={() => {
+                    setMenuOpenId(null)
+                    if (window.confirm(`Apagar “${deck.name}”?`)) deleteDeck(deck.id)
+                  }}
+                />
                 <button
                   type="button"
                   className="deck-open"
@@ -133,7 +176,6 @@ export function DecksPage() {
                     {v.missingNeeded > 0 && (
                       <span className="miss-pill">Faltam {v.missingNeeded}</span>
                     )}
-                    {onProfile && <span className="miss-pill">No perfil</span>}
                   </div>
                   <h2>{deck.name}</h2>
                   <p className="deck-meta">
@@ -156,33 +198,6 @@ export function DecksPage() {
                     </div>
                   </div>
                 </button>
-                <div className="deck-card-actions">
-                  <button type="button" onClick={() => setShareTarget(deck)}>
-                    Compartilhar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={pubBusy === deck.id}
-                    onClick={() => void togglePublish(deck)}
-                  >
-                    {pubBusy === deck.id ? '…' : onProfile ? 'Despublicar' : 'Publicar no perfil'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModal({ mode: 'rename', id: deck.id, name: deck.name })}
-                  >
-                    Renomear
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => {
-                      if (window.confirm(`Apagar “${deck.name}”?`)) deleteDeck(deck.id)
-                    }}
-                  >
-                    Apagar
-                  </button>
-                </div>
               </article>
             )
           })}
@@ -208,6 +223,75 @@ export function DecksPage() {
         snapshot={shareTarget}
         onPublished={() => void refreshPublished()}
       />
+    </div>
+  )
+}
+
+function DeckCardMenu({
+  open,
+  busy,
+  published,
+  onToggle,
+  onClose,
+  onShare,
+  onPublish,
+  onRename,
+  onDelete,
+}: {
+  open: boolean
+  busy: boolean
+  published: boolean
+  onToggle: () => void
+  onClose: () => void
+  onShare: () => void
+  onPublish: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const menuId = useId()
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', onPointer)
+    return () => document.removeEventListener('mousedown', onPointer)
+  }, [open, onClose])
+
+  return (
+    <div className="deck-menu" ref={rootRef}>
+      <button
+        type="button"
+        className="deck-menu-trigger"
+        aria-label="Mais opções"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+      >
+        ⋮
+      </button>
+      {open && (
+        <div className="deck-menu-panel" role="menu" id={menuId}>
+          <button type="button" role="menuitem" onClick={onShare}>
+            Compartilhar
+          </button>
+          <button type="button" role="menuitem" disabled={busy} onClick={onPublish}>
+            {busy ? '…' : published ? 'Despublicar do perfil' : 'Publicar no perfil'}
+          </button>
+          <button type="button" role="menuitem" onClick={onRename}>
+            Renomear
+          </button>
+          <button type="button" role="menuitem" className="is-danger" onClick={onDelete}>
+            Apagar
+          </button>
+        </div>
+      )}
     </div>
   )
 }

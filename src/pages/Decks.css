@@ -150,13 +150,35 @@
 }
 
 .deck-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-page);
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow);
+}
+
+.deck-card.is-public {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+}
+
+.deck-public-badge {
+  position: absolute;
+  top: 0.7rem;
+  right: 2.55rem;
+  z-index: 2;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.4rem;
+  border-radius: var(--chip-radius);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  pointer-events: none;
 }
 
 .deck-open {
@@ -166,9 +188,86 @@
   color: inherit;
   text-align: left;
   padding: 1rem;
+  padding-right: 2.75rem;
   display: grid;
   gap: 0.45rem;
   flex: 1;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+.deck-card.is-public .deck-open {
+  padding-right: 6.5rem;
+}
+
+.deck-menu {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 3;
+}
+
+.deck-menu-trigger {
+  appearance: none;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.deck-menu-trigger:hover,
+.deck-menu-trigger[aria-expanded='true'] {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.deck-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  min-width: 11.5rem;
+  display: grid;
+  padding: 0.3rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-page);
+  box-shadow: var(--shadow);
+}
+
+.deck-menu-panel button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 650;
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+}
+
+.deck-menu-panel button:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.deck-menu-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.deck-menu-panel button.is-danger {
+  color: var(--danger);
 }
 
 .deck-card-top {
@@ -249,30 +348,6 @@
   font-style: normal;
   text-align: right;
   font-weight: 700;
-}
-
-.deck-card-actions {
-  display: flex;
-  border-top: 1px solid var(--border);
-}
-
-.deck-card-actions button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  flex: 1;
-  padding: 0.55rem;
-  font-weight: 650;
-  font-size: 0.8rem;
-}
-
-.deck-card-actions button:first-child {
-  border-right: 1px solid var(--border);
-}
-
-.deck-card-actions button.danger {
-  color: var(--danger);
 }
 
 .name-modal-backdrop {

@@ -5,6 +5,7 @@ import { BinderSettings } from '../components/binder/BinderSettings'
 import { BinderSpread } from '../components/binder/BinderSpread'
 import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { PokedexPanel } from '../components/binder/PokedexPanel'
+import { PokedexReorderModal } from '../components/binder/PokedexReorderModal'
 import { ToolsSidebar } from '../components/binder/ToolsSidebar'
 import { useBinders } from '../hooks/useBinders'
 import { useInventory } from '../hooks/useInventory'
@@ -44,6 +45,7 @@ export function BinderViewPage() {
     updateSettings,
     setGrid,
     renameBinder,
+    reorderPokedexSlots,
   } = useBinders()
   const { entries } = useInventory()
   const { lang } = useLanguage()
@@ -62,6 +64,7 @@ export function BinderViewPage() {
   const [detailsKey, setDetailsKey] = useState<string | null>(null)
   const [inspectRef, setInspectRef] = useState<SlotRef | null>(null)
   const [priceTick, setPriceTick] = useState(0)
+  const [reorderOpen, setReorderOpen] = useState(false)
 
   const isRepository = storedBinder?.kind === 'repository'
 
@@ -79,7 +82,11 @@ export function BinderViewPage() {
   }, [storedBinder, entries, priceTick])
 
   const overlayOpen =
-    settingsOpen || addOpen || Boolean(dexEdit) || Boolean(detailsKey)
+    settingsOpen ||
+    addOpen ||
+    Boolean(dexEdit) ||
+    Boolean(detailsKey) ||
+    reorderOpen
 
   const pages = binder?.pages ?? []
   const totalSpreads = Math.max(1, Math.ceil(pages.length / 2))
@@ -354,7 +361,18 @@ export function BinderViewPage() {
         </button>
         <h1>{binder.name}</h1>
         <div className="view-actions">
-          <span className="kind-pill">{kindLabel}</span>
+          {binder.kind === 'pokedex' || binder.kind === 'wishlist' ? (
+            <button
+              type="button"
+              className="kind-pill kind-pill--action"
+              onClick={() => setReorderOpen(true)}
+              title="Reorganizar espécies"
+            >
+              {kindLabel}
+            </button>
+          ) : (
+            <span className="kind-pill">{kindLabel}</span>
+          )}
           {inventoryCountLabel && (
             <span className="binder-total" title="Quantidade total no inventário">
               {inventoryCountLabel}
@@ -700,6 +718,15 @@ export function BinderViewPage() {
             inspectSlot?.type === 'pokedex' ? inspectSlot.ownedCardIds : undefined
           }
           onClose={() => setDetailsKey(null)}
+        />
+      )}
+
+      {(binder.kind === 'pokedex' || binder.kind === 'wishlist') && (
+        <PokedexReorderModal
+          open={reorderOpen}
+          binder={binder}
+          onClose={() => setReorderOpen(false)}
+          onSave={(orderedDexIds) => reorderPokedexSlots(binder.id, orderedDexIds)}
         />
       )}
     </div>

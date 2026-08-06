@@ -34,13 +34,21 @@ import {
   type PublishedResource,
 } from '../lib/social'
 import type { Binder } from '../types'
+import {
+  DEX_TEMPLATE_CATEGORIES,
+  NATIONAL_TEMPLATE,
+  getDexTemplate,
+  templatesByCategory,
+  type DexTemplate,
+  type DexTemplateCategory,
+} from '../data/dexTemplates'
 import './Binders.css'
 import './CollabBinder.css'
 
 type ModalState =
   | { mode: 'create-custom' }
-  | { mode: 'create-pokedex' }
-  | { mode: 'create-wishlist' }
+  | { mode: 'pick-template'; kind: 'pokedex' | 'wishlist' }
+  | { mode: 'create-from-template'; kind: 'pokedex' | 'wishlist'; templateId: string }
   | { mode: 'create-shared' }
   | { mode: 'rename'; id: string; name: string }
   | null
@@ -128,14 +136,13 @@ export function BindersPage() {
       navigate(`/binders/${binder.id}`)
       return
     }
-    if (modal.mode === 'create-pokedex') {
-      const binder = createPokedex(trimmed)
-      setModal(null)
-      navigate(`/binders/${binder.id}`)
-      return
-    }
-    if (modal.mode === 'create-wishlist') {
-      const binder = createWishlist(trimmed)
+    if (modal.mode === 'create-from-template') {
+      const template = getDexTemplate(modal.templateId)
+      const dexIds = template?.dexIds
+      const binder =
+        modal.kind === 'wishlist'
+          ? createWishlist(trimmed, { dexIds })
+          : createPokedex(trimmed, { dexIds })
       setModal(null)
       navigate(`/binders/${binder.id}`)
       return
@@ -219,14 +226,14 @@ export function BindersPage() {
           <button
             type="button"
             className="btn btn-action btn-action--pokedex"
-            onClick={() => setModal({ mode: 'create-pokedex' })}
+            onClick={() => setModal({ mode: 'pick-template', kind: 'pokedex' })}
           >
             Nova Pokédex
           </button>
           <button
             type="button"
             className="btn btn-action btn-action--wishlist"
-            onClick={() => setModal({ mode: 'create-wishlist' })}
+            onClick={() => setModal({ mode: 'pick-template', kind: 'wishlist' })}
           >
             Nova Pokédex desejada
           </button>
@@ -375,29 +382,42 @@ export function BindersPage() {
         </DndContext>
       )}
 
-      {modal && (
+      {modal?.mode === 'pick-template' && (
+        <TemplatePickerModal
+          kind={modal.kind}
+          onClose={() => setModal(null)}
+          onPick={(template) =>
+            setModal({
+              mode: 'create-from-template',
+              kind: modal.kind,
+              templateId: template.id,
+            })
+          }
+        />
+      )}
+
+      {modal && modal.mode !== 'pick-template' && (
         <NameModal
           title={
             modal.mode === 'create-custom'
               ? 'Novo fichário'
-              : modal.mode === 'create-pokedex'
-                ? 'Nova Pokédex'
-                : modal.mode === 'create-wishlist'
+              : modal.mode === 'create-from-template'
+                ? modal.kind === 'wishlist'
                   ? 'Nova Pokédex desejada'
-                  : modal.mode === 'create-shared'
-                    ? 'Novo fichário compartilhado'
-                    : 'Renomear fichário'
+                  : 'Nova Pokédex'
+                : modal.mode === 'create-shared'
+                  ? 'Novo fichário compartilhado'
+                  : 'Renomear fichário'
           }
           initial={
             modal.mode === 'rename'
               ? modal.name
-              : modal.mode === 'create-pokedex'
-                ? 'Pokédex'
-                : modal.mode === 'create-wishlist'
-                  ? 'Pokédex desejada'
-                  : modal.mode === 'create-shared'
-                    ? 'Fichário com amigos'
-                    : 'Meu fichário'
+              : modal.mode === 'create-from-template'
+                ? getDexTemplate(modal.templateId)?.name ??
+                  (modal.kind === 'wishlist' ? 'Pokédex desejada' : 'Pokédex')
+                : modal.mode === 'create-shared'
+                  ? 'Fichário com amigos'
+                  : 'Meu fichário'
           }
           confirmLabel={
             modal.mode === 'rename' ? 'Salvar' : collabBusy ? 'Criando…' : 'Criar'
@@ -588,6 +608,88 @@ function BinderCardMenu({
   )
 }
 
+function TemplatePickerModal({
+  kind,
+  onClose,
+  onPick,
+}: {
+  kind: 'pokedex' | 'wishlist'
+  onClose: () => void
+  onPick: (template: DexTemplate) => void
+}) {
+  const [category, setCategory] = useState<DexTemplateCategory>('generation')
+  const list = templatesByCategory(category)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="name-modal-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="template-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={kind === 'wishlist' ? 'Modelo de Pokédex desejada' : 'Modelo de Pokédex'}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="template-modal-head">
+          <div>
+            <h2>{kind === 'wishlist' ? 'Pokédex desejada' : 'Nova Pokédex'}</h2>
+            <p>Escolha um modelo — cada slot já vem com um Pokémon definido.</p>
+          </div>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Fechar">
+            ×
+          </button>
+        </header>
+
+        <button
+          type="button"
+          className="template-national"
+          onClick={() => onPick(NATIONAL_TEMPLATE)}
+        >
+          <strong>{NATIONAL_TEMPLATE.name}</strong>
+          <span>{NATIONAL_TEMPLATE.description}</span>
+        </button>
+
+        <div className="template-tabs" role="tablist" aria-label="Categoria do modelo">
+          {DEX_TEMPLATE_CATEGORIES.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="tab"
+              aria-selected={category === c.id}
+              className={category === c.id ? 'active' : ''}
+              onClick={() => setCategory(c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="template-grid" role="tabpanel">
+          {list.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="template-card"
+              onClick={() => onPick(t)}
+            >
+              <strong>{t.name}</strong>
+              <span>{t.description ?? `${t.dexIds.length} Pokémon`}</span>
+              <em>{t.dexIds.length}</em>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function NameModal({
   title,
   initial,
@@ -602,6 +704,10 @@ function NameModal({
   onSubmit: (name: string) => void
 }) {
   const [value, setValue] = useState(initial)
+
+  useEffect(() => {
+    setValue(initial)
+  }, [initial])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

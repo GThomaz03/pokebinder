@@ -1,0 +1,38 @@
+.dex-sprite {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--slot);
+  border-radius: var(--chip-radius, 4px);
+}
+
+.dex-sprite img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.dex-sprite img.is-shown {
+  opacity: 1;
+}
+
+.dex-sprite .sk-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  border-radius: inherit;
+}
+
+.dex-sprite-ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--slot);
+}

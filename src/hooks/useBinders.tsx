@@ -26,6 +26,7 @@ import {
   findEmptySlotsOnPage,
   pokedexProgress,
   rebuildPagesForGrid,
+  reorderPokedexByDexIds,
   swapSlots,
 } from '../lib/binderUtils'
 import { createRepositoryBinder } from '../lib/repositoryBinder'
@@ -40,8 +41,14 @@ type BindersContextValue = {
   binders: Binder[]
   getBinder: (id: string) => Binder | undefined
   createBinder: (name: string, grid?: GridLayout) => Binder
-  createPokedex: (name: string, grid?: GridLayout) => Binder
-  createWishlist: (name: string, grid?: GridLayout) => Binder
+  createPokedex: (
+    name: string,
+    opts?: { grid?: GridLayout; dexIds?: number[] },
+  ) => Binder
+  createWishlist: (
+    name: string,
+    opts?: { grid?: GridLayout; dexIds?: number[] },
+  ) => Binder
   ensurePokedex: () => Binder
   ensureRepository: () => Binder
   deleteBinder: (id: string) => void
@@ -65,6 +72,7 @@ type BindersContextValue = {
     slotIndex: number,
     patch: Partial<PokedexSlot>,
   ) => void
+  reorderPokedexSlots: (id: string, orderedDexIds: number[]) => void
   setAllMissing: (id: string) => void
   markSlotMissing: (id: string, ref: SlotRef) => void
   togglePin: (id: string, ref: SlotRef) => void
@@ -133,20 +141,31 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     return binder
   }, [])
 
-  const createPokedex = useCallback((name: string, grid: GridLayout = '3x3') => {
-    const binder = createPokedexBinder(grid, {
-      kind: 'pokedex',
-      name: name.trim() || 'Pokédex',
-    })
-    setBinders((prev) => [binder, ...prev])
-    return binder
-  }, [])
+  const createPokedex = useCallback(
+    (name: string, opts?: { grid?: GridLayout; dexIds?: number[] }) => {
+      const binder = createPokedexBinder(opts?.grid ?? '3x3', {
+        kind: 'pokedex',
+        name: name.trim() || 'Pokédex',
+        dexIds: opts?.dexIds,
+      })
+      setBinders((prev) => [binder, ...prev])
+      return binder
+    },
+    [],
+  )
 
-  const createWishlist = useCallback((name: string, grid: GridLayout = '3x3') => {
-    const binder = createWishlistBinder(name.trim() || 'Pokédex desejada', grid)
-    setBinders((prev) => [binder, ...prev])
-    return binder
-  }, [])
+  const createWishlist = useCallback(
+    (name: string, opts?: { grid?: GridLayout; dexIds?: number[] }) => {
+      const binder = createWishlistBinder(
+        name.trim() || 'Pokédex desejada',
+        opts?.grid ?? '3x3',
+        opts?.dexIds,
+      )
+      setBinders((prev) => [binder, ...prev])
+      return binder
+    },
+    [],
+  )
 
   const ensurePokedex = useCallback(() => {
     let created: Binder | null = null
@@ -464,6 +483,16 @@ export function BindersProvider({ children }: { children: ReactNode }) {
     [update],
   )
 
+  const reorderPokedexSlots = useCallback(
+    (id: string, orderedDexIds: number[]) => {
+      update(id, (b) => {
+        if (b.kind !== 'pokedex' && b.kind !== 'wishlist') return b
+        return { ...b, pages: reorderPokedexByDexIds(b, orderedDexIds) }
+      })
+    },
+    [update],
+  )
+
   const setAllMissing = useCallback(
     (id: string) => {
       update(id, (b) => {
@@ -567,6 +596,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       setSlot,
       takeSlot,
       updatePokedexSlot,
+      reorderPokedexSlots,
       setAllMissing,
       markSlotMissing,
       togglePin,
@@ -596,6 +626,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
       setSlot,
       takeSlot,
       updatePokedexSlot,
+      reorderPokedexSlots,
       setAllMissing,
       markSlotMissing,
       togglePin,
