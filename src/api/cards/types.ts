@@ -36,7 +36,10 @@ export type SetMeta = {
   name: string
   logo?: string
   symbol?: string
+  /** Prefer cardCount.total (includes secret rares). */
   cardCount: number
+  /** Official/main-set count when the API provides it. */
+  cardCountOfficial?: number
   releaseDate?: string
   abbreviation?: string
   serieName?: string

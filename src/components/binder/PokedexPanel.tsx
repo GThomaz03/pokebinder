@@ -207,7 +207,14 @@ export function PokedexPanel({
                     aria-pressed={owned}
                   >
                     {card.image ? (
-                      <CardImage src={card.image} alt={card.name} quality="high" />
+                      <CardImage
+                        src={card.image}
+                        alt={card.name}
+                        quality="high"
+                        cardId={card.cardId}
+                        cardName={card.name}
+                        localId={card.localId}
+                      />
                     ) : (
                       <div className="ph">Sem imagem</div>
                     )}

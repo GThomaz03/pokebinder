@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   clearCachedImageUrl,
   getCachedImageUrl,
@@ -36,16 +36,10 @@ function buildCandidates(
   const urls: string[] = []
 
   if (src) {
-    if (/\.(webp|png|jpg|jpeg)(\?.*)?$/i.test(src)) {
-      urls.push(src)
-      const en = src.replace(/\/(pt|ja)\//i, '/en/')
-      if (en !== src) urls.push(en)
-      const flipped = en.replace(/\/(low|high)\./i, (_, q: string) =>
-        q.toLowerCase() === 'low' ? '/high.' : '/low.',
-      )
-      if (!urls.includes(flipped)) urls.push(flipped)
-    } else {
-      urls.push(...cardImageCandidates(src, quality))
+    // Expand base OR full URLs into locale/quality/format matrix.
+    // Raw TCGdex bases without /high.webp|/low.webp always 404 on the CDN.
+    for (const u of cardImageCandidates(src, quality)) {
+      if (!urls.includes(u)) urls.push(u)
     }
   }
 
@@ -61,15 +55,6 @@ function buildCandidates(
   }
 
   return urls
-}
-
-function normalizeImgSrc(url: string): string {
-  try {
-    return new URL(url, typeof window !== 'undefined' ? window.location.href : 'https://local')
-      .href
-  } catch {
-    return url
-  }
 }
 
 /**
@@ -112,6 +97,7 @@ export function CardImage({
   const [index, setIndex] = useState(0)
   const [exhausted, setExhausted] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const intendedRef = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     setIndex(0)
@@ -120,6 +106,7 @@ export function CardImage({
   }, [srcKey, quality, cardKey, cacheKey])
 
   const current = candidates[index]
+  intendedRef.current = current
 
   useEffect(() => {
     setLoaded(false)
@@ -135,9 +122,11 @@ export function CardImage({
     .join(' ')
 
   if (!current || exhausted) {
-    return <span className={rootClass || 'card-img-root is-empty'} aria-hidden>
-      <span className="ph" />
-    </span>
+    return (
+      <span className={rootClass || 'card-img-root is-empty'} aria-hidden>
+        <span className="ph" />
+      </span>
+    )
   }
 
   return (
@@ -155,12 +144,10 @@ export function CardImage({
           setLoaded(true)
           setCachedImageUrl(cacheKey, current)
         }}
-        onError={(e) => {
-          const failed = normalizeImgSrc((e.currentTarget as HTMLImageElement).src)
-          const expected = normalizeImgSrc(current)
-          // Ignore stale/aborted errors that don't match the URL we intended to show.
-          if (failed !== expected) return
-
+        onError={() => {
+          // Advance whenever this img (keyed to `current`) fails. Avoid brittle
+          // href string compares that can stall the fallback chain.
+          if (intendedRef.current !== current) return
           clearCachedImageUrl(cacheKey, current)
           setLoaded(false)
           if (index + 1 < candidates.length) setIndex(index + 1)

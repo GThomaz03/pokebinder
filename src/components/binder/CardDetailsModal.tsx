@@ -58,7 +58,7 @@ export function CardDetailsModal({
           rarity?: string
           illustrator?: string
           types?: string[]
-          set?: { cardCount?: { official?: number } }
+          set?: { cardCount?: { official?: number; total?: number } }
           variants?: Record<string, boolean>
           variants_detailed?: Array<{
             type: string
@@ -74,13 +74,13 @@ export function CardDetailsModal({
             tcgplayer?: Record<string, { marketPrice?: number | null } | null>
           }
         }
+        const setTotal =
+          full.set?.cardCount?.total ?? full.set?.cardCount?.official
         setMeta({
           rarity: full.rarity,
           illustrator: full.illustrator,
           types: full.types,
-          setTotal: full.set?.cardCount?.official
-            ? String(full.set.cardCount.official)
-            : undefined,
+          setTotal: setTotal != null ? String(setTotal) : undefined,
         })
 
         const rows: VariantRow[] = []

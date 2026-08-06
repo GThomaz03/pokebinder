@@ -180,9 +180,13 @@ export async function hydrateCard(
   const cardId = parsed.cardId
   const fetchLang = parsed.lang ?? lang
   const existing = cardCache[cardId]
+  const imageLooksRaw =
+    Boolean(existing?.image) &&
+    !/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(existing!.image!)
   const stale =
     !existing ||
     !existing.image ||
+    imageLooksRaw ||
     force ||
     Date.now() - (existing.price.updated || 0) > API_CONFIG.cache.priceStaleTimeMs
 
@@ -265,11 +269,8 @@ export function seedCardBrief(brief: {
 }): CachedCard {
   const id = baseCardId(brief.id)
   const existing = cardCache[id]
-  const image = brief.image
-    ? brief.image.includes('/high.') || brief.image.includes('/low.')
-      ? brief.image
-      : brief.image
-    : existing?.image
+  // TCGdex resumes return image bases without /high.webp — never persist those raw.
+  const image = cardImageUrl(brief.image, 'high') ?? existing?.image
   const cached: CachedCard = {
     id,
     name: brief.name || existing?.name || id,

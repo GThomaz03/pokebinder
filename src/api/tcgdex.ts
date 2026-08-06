@@ -11,6 +11,7 @@ import {
   toPokemonTcgIoSetId,
 } from './images/imageProvider'
 import { quoteFromPricingSync } from './prices/tcgdexPriceProvider'
+import { resolvePokemonSearchTerms } from '../lib/pokemonNameAliases'
 
 export {
   baseCardId,
@@ -93,19 +94,29 @@ export async function fetchCardRest(
   set?: { id?: string; name?: string }
   pricing?: PricingBlock
 } | null> {
+  type CardRest = {
+    id: string
+    name: string
+    localId: string | number
+    image?: string
+    set?: { id?: string; name?: string }
+    pricing?: PricingBlock
+  }
   const langs: CardLang[] = lang === 'en' ? ['en'] : [lang, 'en']
   for (const lid of localIdVariants(localId)) {
     for (const L of langs) {
       try {
         const url = `${API_CONFIG.tcgdex.baseUrl}/${L}/cards/${setId}-${lid}`
-        const card = await fetchJson<{
-          id: string
-          name: string
-          localId: string | number
-          image?: string
-          set?: { id?: string; name?: string }
-          pricing?: PricingBlock
-        }>(url, { maxRetries: 1 })
+        const card = await fetchJson<CardRest>(url, { maxRetries: 1 })
+        if (card?.id) return card
+      } catch (err) {
+        if (err instanceof CatalogError && err.status === 404) continue
+        /* try next */
+      }
+      // Preferred set+localId path when /cards/{id} is missing in this locale
+      try {
+        const url = `${API_CONFIG.tcgdex.baseUrl}/${L}/sets/${setId}/${lid}`
+        const card = await fetchJson<CardRest>(url, { maxRetries: 1 })
         if (card?.id) return card
       } catch (err) {
         if (err instanceof CatalogError && err.status === 404) continue
@@ -125,11 +136,38 @@ export function variantLabel(type: string, extras: string[] = []): string {
 export function isSpeciesCardName(cardName: string, speciesName: string): boolean {
   const n = cardName.toLowerCase().trim()
   const s = speciesName.toLowerCase().trim()
+  if (!s) return false
   if (n === s) return true
-  if (n.startsWith(`${s} `)) return true
-  if (n.endsWith(` ${s}`)) return true
-  if (n.includes(`'s ${s}`)) return true
-  return false
+  // Whole-word match covers Mega Venusaur ex, M Venusaur EX, Venusaur VMAX, etc.
+  try {
+    const re = new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(s)}(?:[^a-z0-9]|$)`, 'i')
+    return re.test(n)
+  } catch {
+    return n.includes(s)
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Paginate EN catalog by strict dexId (TCGdex requires eq for numeric dexId). */
+async function listAllByDexId(dexId: number): Promise<CardBrief[]> {
+  const sdk = getClient('en')
+  const all: CardBrief[] = []
+  for (let page = 1; page <= 40; page++) {
+    try {
+      const batch = (await sdk.card.list(
+        Query.create().equal('dexId', dexId).paginate(page, 100),
+      )) as CardBrief[]
+      if (!batch.length) break
+      all.push(...batch)
+      if (batch.length < 100) break
+    } catch {
+      break
+    }
+  }
+  return all
 }
 
 export async function fetchSets(lang: CardLang) {
@@ -212,7 +250,25 @@ async function fetchCardBrief(
           id: card.id,
           name: card.name,
           localId: card.localId,
-          image: card.image,
+          image: cardImageUrl(card.image, 'low') ?? card.image,
+        }
+      } catch {
+        /* try next */
+      }
+      try {
+        const card = await fetchJson<{
+          id: string
+          name: string
+          localId: string | number
+          image?: string
+        }>(`${API_CONFIG.tcgdex.baseUrl}/${L}/sets/${setId}/${lid}`, { maxRetries: 1 })
+        if (card?.id) {
+          return {
+            id: card.id,
+            name: card.name,
+            localId: card.localId,
+            image: cardImageUrl(card.image, 'low') ?? card.image,
+          }
         }
       } catch {
         /* try next */
@@ -259,7 +315,11 @@ function setIdFromCardId(cardId: string): string {
 }
 
 function withSetId(brief: CardBrief): CardBrief {
-  return { ...brief, setId: brief.setId ?? setIdFromCardId(brief.id) }
+  return {
+    ...brief,
+    setId: brief.setId ?? setIdFromCardId(brief.id),
+    image: cardImageUrl(brief.image, 'low') ?? brief.image,
+  }
 }
 
 /** Prefer locale metadata; fall back to EN / original brief. */
@@ -315,10 +375,14 @@ export async function searchCards(lang: CardLang, name: string, page = 1): Promi
   const tasks: Promise<void>[] = []
 
   // Name: locale catalog + EN discovery (JA has Japanese names; Latin names live in EN)
+  // Expand PT national names (Venossauro → Venusaur) before querying.
   if (!isNumberQuery) {
-    tasks.push(listByName(lang, q, page, 30).then(merge))
-    if (lang !== 'en') {
-      tasks.push(listByName('en', q, page, 30).then(merge))
+    const nameTerms = resolvePokemonSearchTerms(q)
+    for (const term of nameTerms) {
+      tasks.push(listByName(lang, term, page, 30).then(merge))
+      if (lang !== 'en') {
+        tasks.push(listByName('en', term, page, 30).then(merge))
+      }
     }
   }
 
@@ -465,7 +529,7 @@ export async function searchCardsAdvanced(
       id: c.id,
       name: c.name,
       localId: c.localId,
-      image: c.image,
+      image: cardImageUrl(c.image, 'low') ?? c.image,
       setId: c.setId ?? setIdFromCardId(c.id),
     }))
 
@@ -771,7 +835,7 @@ function expandCardVariants(card: FullCardLike): CardVariantEntry[] {
 }
 
 /**
- * Discover printings via English catalog (stable names), then load
+ * Discover printings via English catalog (dexId + name), then load
  * details/images in the requested nationality (pt/en/ja).
  */
 export async function fetchSpeciesVariants(
@@ -779,20 +843,31 @@ export async function fetchSpeciesVariants(
   dexId: number,
   speciesName: string,
 ): Promise<CardVariantEntry[]> {
+  const byId = new Map<string, CardBrief>()
+
+  function merge(list: CardBrief[]) {
+    for (const c of list) {
+      if (c?.id && !byId.has(c.id)) byId.set(c.id, c)
+    }
+  }
+
+  // Primary: strict dexId (covers Mega … ex / SIR beyond official count)
+  merge(await listAllByDexId(dexId))
+
+  // Supplement: name search for cards missing dexId in the index
   const briefs = await listAllByName('en', speciesName)
-  const candidates = briefs.filter((c) => isSpeciesCardName(c.name, speciesName))
+  merge(briefs.filter((c) => isSpeciesCardName(c.name, speciesName)))
 
   try {
     const exact = (await getClient('en').card.list(
       Query.create().equal('name', speciesName).paginate(1, 100),
     )) as CardBrief[]
-    for (const c of exact) {
-      if (!candidates.some((x) => x.id === c.id)) candidates.push(c)
-    }
+    merge(exact)
   } catch {
     // ignore
   }
 
+  const candidates = [...byId.values()]
   const variants: CardVariantEntry[] = []
   const concurrency = 6
   for (let i = 0; i < candidates.length; i += concurrency) {

@@ -10,10 +10,23 @@ function load(): ImageUrlMap {
     if (!raw) return {}
     const parsed = (JSON.parse(raw) as ImageUrlMap) ?? {}
     // Drop remembered PokémonTCG.io URLs that used raw TCGdex set ids (e.g. sv03.5 → 404).
+    // Also drop TCGdex bases without /high|/low (always 404) and short set forms (sv3.5).
     let changed = false
     const next: ImageUrlMap = {}
     for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === 'string' && /images\.pokemontcg\.io\/[^/]*\d\.\d\//.test(v)) {
+      if (typeof v !== 'string') {
+        changed = true
+        continue
+      }
+      if (/images\.pokemontcg\.io\/[^/]*\d\.\d\//.test(v)) {
+        changed = true
+        continue
+      }
+      if (/assets\.tcgdex\.net\//i.test(v) && !/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(v)) {
+        changed = true
+        continue
+      }
+      if (/assets\.tcgdex\.net\/[^/]+\/sv\/sv\d\.\d\//i.test(v)) {
         changed = true
         continue
       }

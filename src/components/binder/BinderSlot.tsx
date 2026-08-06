@@ -323,7 +323,7 @@ export function BinderSlot({
             cardName={cached?.name}
             localId={
               cached?.localId ||
-              (cardId?.includes('-') ? cardId.slice(cardId.indexOf('-') + 1) : undefined)
+              (cardId?.includes('-') ? cardId.slice(cardId.lastIndexOf('-') + 1) : undefined)
             }
             draggable={false}
           />

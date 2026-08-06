@@ -108,12 +108,14 @@ export const tcgdexCardProvider: CardProvider = {
       }
       const count = set.cardCount as { official?: number; total?: number } | undefined
       const abbr = (set as { abbreviation?: { official?: string } }).abbreviation?.official
+      const total = count?.total ?? count?.official ?? 0
       const meta: SetMeta = {
         id: set.id,
         name: set.name,
         logo: logoUrl(set.logo as string | undefined),
         symbol: logoUrl(set.symbol as string | undefined),
-        cardCount: count?.official ?? count?.total ?? 0,
+        cardCount: total,
+        cardCountOfficial: count?.official,
         releaseDate: (set as { releaseDate?: string }).releaseDate,
         abbreviation: abbr,
         serieName: (set as { serie?: { name?: string } }).serie?.name,

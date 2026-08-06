@@ -87,18 +87,57 @@ function seriesFromSetId(setId: string): string | undefined {
   return m?.[1]?.toLowerCase()
 }
 
-export function toPokemonTcgIoSetId(setId: string): string {
-  if (!setId.includes('.')) return setId
-  return setId.replace(/0+(\d)/g, '$1').replace(/\./g, 'pt')
+/**
+ * TCGdex set ids use zero-padded forms (`sv03.5`). Short forms (`sv3.5`) 404 on
+ * the assets CDN even though PokémonTCG.io uses `sv3pt5`.
+ */
+const TCGDEX_SET_ALIASES: Record<string, string> = {
+  'sv3.5': 'sv03.5',
+  'sv4.5': 'sv04.5',
+  'sv6.5': 'sv06.5',
+  'sv8.5': 'sv08.5',
+  sv1: 'sv01',
+  sv2: 'sv02',
+  sv3: 'sv03',
+  sv4: 'sv04',
+  sv5: 'sv05',
+  sv6: 'sv06',
+  sv7: 'sv07',
+  sv8: 'sv08',
+  sv9: 'sv09',
 }
 
+export function canonicalizeTcgdexSetId(setId: string): string {
+  const lower = setId.toLowerCase()
+  return TCGDEX_SET_ALIASES[lower] ?? setId
+}
+
+export function toPokemonTcgIoSetId(setId: string): string {
+  const canonical = canonicalizeTcgdexSetId(setId)
+  if (!canonical.includes('.')) return canonical
+  return canonical.replace(/0+(\d)/g, '$1').replace(/\./g, 'pt')
+}
+
+const IMAGE_FILE_RE = /\.(webp|png|jpg|jpeg)(\?.*)?$/i
+const IMAGE_QUALITY_RE = /\/(high|low)\.(webp|png|jpg|jpeg)(\?.*)?$/i
+
+/** Strip `/high.webp` (etc.) so we can rebuild quality/format/locale variants. */
+export function stripCardImageQuality(url: string): string {
+  return url.replace(IMAGE_QUALITY_RE, '')
+}
+
+/**
+ * TCGdex `image` is a CDN **base** without quality/extension. Using it raw in
+ * `<img src>` always 404s — append `/{high|low}.webp`.
+ */
 export function cardImageUrl(
   imageBase: string | undefined,
   quality: 'high' | 'low' = 'low',
 ): string | undefined {
   if (!imageBase) return undefined
-  if (/\.(webp|png|jpg|jpeg)$/i.test(imageBase)) return imageBase
-  return `${imageBase}/${quality}.webp`
+  if (IMAGE_QUALITY_RE.test(imageBase)) return imageBase
+  if (IMAGE_FILE_RE.test(imageBase)) return imageBase
+  return `${imageBase.replace(/\/$/, '')}/${quality}.webp`
 }
 
 export function cardImageCandidates(
@@ -106,20 +145,25 @@ export function cardImageCandidates(
   quality: 'high' | 'low' = 'low',
 ): string[] {
   if (!imageBase) return []
-  const primary = cardImageUrl(imageBase, quality)
-  if (!primary) return []
-  const out = [primary]
-  const enBase = imageBase.replace(/\/(pt|ja)\//i, '/en/')
-  if (enBase !== imageBase) {
-    const en = cardImageUrl(enBase, quality)
-    if (en && !out.includes(en)) out.push(en)
+
+  const root = stripCardImageQuality(imageBase).replace(/\/$/, '')
+  const out: string[] = []
+  const bases = [root]
+  const enBase = root.replace(/\/(pt|ja)\//i, '/en/')
+  if (enBase !== root) bases.push(enBase)
+  // Prefer EN assets when the source was already EN-only — also try PT when EN given
+  const ptBase = root.replace(/\/en\//i, '/pt/')
+  if (ptBase !== root && !bases.includes(ptBase)) bases.push(ptBase)
+
+  const qualities: Array<'high' | 'low'> =
+    quality === 'low' ? ['low', 'high'] : ['high', 'low']
+
+  for (const base of bases) {
+    for (const q of qualities) {
+      pushUnique(out, `${base}/${q}.webp`)
+      pushUnique(out, `${base}/${q}.png`)
+    }
   }
-  const otherQuality = quality === 'low' ? 'high' : 'low'
-  const enOther = cardImageUrl(
-    enBase !== imageBase ? enBase : imageBase.replace(/\/(pt|ja)\//i, '/en/'),
-    otherQuality,
-  )
-  if (enOther && !out.includes(enOther)) out.push(enOther)
   return out
 }
 
@@ -129,9 +173,9 @@ export function inferTcgdexImageBase(
   localId?: string | number,
 ): string | undefined {
   const id = baseCardId(cardId)
-  const dash = id.indexOf('-')
+  const dash = id.lastIndexOf('-')
   if (dash <= 0) return undefined
-  const setId = id.slice(0, dash)
+  const setId = canonicalizeTcgdexSetId(id.slice(0, dash))
   const lid = String(localId ?? id.slice(dash + 1))
   const series = seriesFromSetId(setId)
   if (!series || !lid) return undefined
@@ -165,7 +209,7 @@ export function inferMissingImageCandidates(opts: {
 }): string[] {
   const urls: string[] = []
   const id = baseCardId(opts.cardId)
-  const dash = id.indexOf('-')
+  const dash = id.lastIndexOf('-')
   const setId = dash > 0 ? id.slice(0, dash) : ''
   const raw = dash > 0 ? String(opts.localId ?? id.slice(dash + 1)) : String(opts.localId ?? '')
   const stripped = raw.replace(/^0+/, '') || (raw ? '0' : '')
