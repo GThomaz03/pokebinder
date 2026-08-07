@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   clearCachedImageUrl,
   getCachedImageUrl,
@@ -7,6 +7,11 @@ import {
 } from '../api/imageCache'
 import { cardImageCandidates, inferMissingImageCandidates } from '../api/images/imageProvider'
 import './Skeleton.css'
+
+/** Browser-cached images can finish before React attaches onLoad; complete stays true. */
+function isImgReady(img: HTMLImageElement | null | undefined): boolean {
+  return !!img && img.complete && img.naturalWidth > 0
+}
 
 type Props = {
   /** Image base from TCGdex (`…/pt/ex/ex6/113`) or a full URL (`…/low.webp`) */
@@ -98,19 +103,27 @@ export function CardImage({
   const [exhausted, setExhausted] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const intendedRef = useRef<string | undefined>(undefined)
+  const imgRef = useRef<HTMLImageElement | null>(null)
 
   useEffect(() => {
     setIndex(0)
     setExhausted(false)
-    setLoaded(false)
   }, [srcKey, quality, cardKey, cacheKey])
 
   const current = candidates[index]
   intendedRef.current = current
 
-  useEffect(() => {
+  // Sync visibility with the DOM img. Cached back-navigation often completes
+  // before onLoad is attached (or after a stale setLoaded(false) effect), so
+  // opacity would stay 0 forever without reading `complete`.
+  useLayoutEffect(() => {
     setLoaded(false)
-  }, [current])
+    const img = imgRef.current
+    if (isImgReady(img) && current) {
+      setLoaded(true)
+      setCachedImageUrl(cacheKey, current)
+    }
+  }, [current, cacheKey])
 
   const rootClass = [
     'card-img-root',
@@ -135,19 +148,28 @@ export function CardImage({
       <img
         // Remount per URL so an aborted previous load cannot fire onError on the next candidate.
         key={current}
+        ref={imgRef}
         className={`card-img-el${loaded ? ' is-shown' : ''}`}
         src={current}
         alt={alt}
         loading={loading}
         draggable={draggable}
-        onLoad={() => {
+        onLoad={(e) => {
+          if (!isImgReady(e.currentTarget)) return
           setLoaded(true)
           setCachedImageUrl(cacheKey, current)
         }}
-        onError={() => {
+        onError={(e) => {
           // Advance whenever this img (keyed to `current`) fails. Avoid brittle
           // href string compares that can stall the fallback chain.
           if (intendedRef.current !== current) return
+          // Aborted loads (page turn / StrictMode) can fire error; ignore if
+          // the bitmap is already usable so we don't wipe a good cache entry.
+          if (isImgReady(e.currentTarget)) {
+            setLoaded(true)
+            setCachedImageUrl(cacheKey, current)
+            return
+          }
           clearCachedImageUrl(cacheKey, current)
           setLoaded(false)
           if (index + 1 < candidates.length) setIndex(index + 1)
