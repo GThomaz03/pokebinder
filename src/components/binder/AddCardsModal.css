@@ -369,6 +369,20 @@
   line-height: 1.4;
 }
 
+.state.error {
+  color: var(--danger, #c44);
+}
+
+.catalog-fallback-banner {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent, #e8b84a) 18%, var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+
 .state.small {
   font-size: 0.78rem;
   margin: 0;

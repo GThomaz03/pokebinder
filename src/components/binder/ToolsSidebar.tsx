@@ -1,4 +1,11 @@
+import { useEffect, useMemo, useState } from 'react'
+import { baseCardId } from '../../api/cardKeys'
+import { getSetsMeta, type SetMeta } from '../../api/sets'
+import { getCachedCard, hydrateCard } from '../../api/prices'
+import { collectBinderSets } from '../../lib/binderCollections'
+import { useLanguage } from '../../hooks/useLanguage'
 import type { Binder, SlotRef, ToolMode } from '../../types'
+import { CardImage } from '../CardImage'
 import './ToolsSidebar.css'
 
 type Props = {
@@ -26,12 +33,75 @@ export function ToolsSidebar({
   onReorder,
   canReorder,
 }: Props) {
+  const { lang } = useLanguage()
+  const [activeSetId, setActiveSetId] = useState<string | null>(null)
+  const [setMeta, setSetMeta] = useState<Record<string, SetMeta>>({})
+  const [cardTick, setCardTick] = useState(0)
+
+  const groups = useMemo(() => collectBinderSets(binder), [binder])
+  const setIdsKey = useMemo(() => groups.map((g) => g.setId).join('|'), [groups])
+
+  useEffect(() => {
+    if (mode !== 'collections') setActiveSetId(null)
+  }, [mode])
+
+  useEffect(() => {
+    if (mode !== 'collections' || !setIdsKey) {
+      setSetMeta({})
+      return
+    }
+    const ids = setIdsKey.split('|').filter(Boolean)
+    let cancelled = false
+    void getSetsMeta(lang, ids).then((map) => {
+      if (!cancelled) setSetMeta(map)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [mode, lang, setIdsKey])
+
+  const sortedGroups = useMemo(() => {
+    return [...groups].sort((a, b) => {
+      const ad = setMeta[a.setId]?.releaseDate ?? ''
+      const bd = setMeta[b.setId]?.releaseDate ?? ''
+      if (ad && bd) return bd.localeCompare(ad)
+      if (ad) return -1
+      if (bd) return 1
+      const an = setMeta[a.setId]?.name ?? a.setId
+      const bn = setMeta[b.setId]?.name ?? b.setId
+      return an.localeCompare(bn, 'pt-BR')
+    })
+  }, [groups, setMeta])
+
+  const activeGroup = activeSetId
+    ? groups.find((g) => g.setId === activeSetId) ?? null
+    : null
+
+  useEffect(() => {
+    if (!activeSetId || !activeGroup) return
+    let cancelled = false
+    const ids = [...new Set(activeGroup.entries.map((e) => baseCardId(e.cardId)))]
+    void Promise.all(ids.map((id) => hydrateCard(lang, id))).then(() => {
+      if (!cancelled) setCardTick((t) => t + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when set or entries change
+  }, [activeSetId, activeGroup?.count, lang])
+
+  void cardTick
+
+  function setMode(next: ToolMode) {
+    onMode(mode === next ? 'none' : next)
+  }
+
   return (
     <aside className="tools-side" aria-label="Ferramentas">
       <button
         type="button"
         className={mode === 'select' ? 'active' : ''}
-        onClick={() => onMode(mode === 'select' ? 'none' : 'select')}
+        onClick={() => setMode('select')}
         title="Selecionar várias"
       >
         <SelectIcon />
@@ -41,7 +111,7 @@ export function ToolsSidebar({
       <button
         type="button"
         className={mode === 'overview' ? 'active' : ''}
-        onClick={() => onMode(mode === 'overview' ? 'none' : 'overview')}
+        onClick={() => setMode('overview')}
         title="Visão das páginas"
       >
         <PagesIcon />
@@ -49,8 +119,18 @@ export function ToolsSidebar({
       </button>
       <button
         type="button"
+        className={mode === 'collections' ? 'active' : ''}
+        onClick={() => setMode('collections')}
+        title="Coleções no fichário"
+      >
+        <CollectionsIcon />
+        <span>Coleções</span>
+        {groups.length > 0 && <em>{groups.length}</em>}
+      </button>
+      <button
+        type="button"
         className={mode === 'search' ? 'active' : ''}
-        onClick={() => onMode(mode === 'search' ? 'none' : 'search')}
+        onClick={() => setMode('search')}
         title="Pesquisar no fichário"
       >
         <SearchIcon />
@@ -115,6 +195,99 @@ export function ToolsSidebar({
         </div>
       )}
 
+      {mode === 'collections' && (
+        <div className="tool-panel collections">
+          {activeGroup ? (
+            <>
+              <div className="collections-detail-head">
+                <button
+                  type="button"
+                  className="collections-back"
+                  onClick={() => setActiveSetId(null)}
+                >
+                  ← Voltar
+                </button>
+                <strong>
+                  {setMeta[activeGroup.setId]?.name ?? activeGroup.setId}
+                </strong>
+                <span>
+                  {activeGroup.count} carta{activeGroup.count === 1 ? '' : 's'}
+                </span>
+              </div>
+              <ul className="collections-cards">
+                {activeGroup.entries.map((entry, i) => {
+                  const cached = getCachedCard(baseCardId(entry.cardId))
+                  return (
+                    <li key={`${entry.pageIndex}-${entry.slotIndex}-${entry.cardId}-${i}`}>
+                      <button
+                        type="button"
+                        className="collections-card-btn"
+                        onClick={() =>
+                          onJump({
+                            pageIndex: entry.pageIndex,
+                            slotIndex: entry.slotIndex,
+                          })
+                        }
+                      >
+                        <span className="collections-card-art">
+                          <CardImage
+                            src={cached?.image}
+                            alt=""
+                            quality="low"
+                            cardId={baseCardId(entry.cardId)}
+                            cardName={cached?.name}
+                            localId={cached?.localId}
+                          />
+                        </span>
+                        <span className="collections-card-meta">
+                          <strong>{cached?.name ?? entry.cardId}</strong>
+                          <small>
+                            #{cached?.localId ?? '—'} · p.{entry.pageIndex + 1} · slot{' '}
+                            {entry.slotIndex + 1}
+                          </small>
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
+          ) : sortedGroups.length === 0 ? (
+            <p className="empty">Nenhuma coleção neste fichário.</p>
+          ) : (
+            <ul className="collections-list">
+              {sortedGroups.map((group) => {
+                const meta = setMeta[group.setId]
+                const code = meta?.abbreviation ?? group.setId.toUpperCase()
+                return (
+                  <li key={group.setId}>
+                    <button
+                      type="button"
+                      className="collections-set-btn"
+                      onClick={() => setActiveSetId(group.setId)}
+                    >
+                      <span className="collections-set-logo">
+                        {meta?.logo ? (
+                          <img src={meta.logo} alt="" loading="lazy" />
+                        ) : (
+                          <span className="collections-set-logo-ph" aria-hidden />
+                        )}
+                      </span>
+                      <span className="collections-set-meta">
+                        <strong>{meta?.name ?? group.setId}</strong>
+                        <small>
+                          {code} · {group.count} carta{group.count === 1 ? '' : 's'}
+                        </small>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
       {mode === 'select' && (
         <p className="tip">Clique nas cartas para selecionar. Use a bandeja para mover o lote.</p>
       )}
@@ -135,6 +308,15 @@ function PagesIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
       <rect x="4" y="4" width="7" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
       <rect x="13" y="4" width="7" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
+function CollectionsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="5" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M7 3h12a2 2 0 0 1 2 2v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }

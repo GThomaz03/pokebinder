@@ -6,7 +6,7 @@ export type BinderKind = 'custom' | 'pokedex' | 'wishlist' | 'repository'
 
 export type PriceMarket = 'cardmarket' | 'tcgplayer'
 
-export type ToolMode = 'none' | 'select' | 'overview' | 'search'
+export type ToolMode = 'none' | 'select' | 'overview' | 'search' | 'collections'
 
 export type CardSlot = {
   type: 'card'

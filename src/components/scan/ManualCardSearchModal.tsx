@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { searchCardsRepo } from '../../api/cards/cardRepository'
+import {
+  getLastCatalogSource,
+  searchCardsRepo,
+  type CatalogSource,
+} from '../../api/cards/cardRepository'
 import { hydrateCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { LANG_OPTIONS } from '../../i18n'
@@ -44,6 +48,7 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
   const [results, setResults] = useState<Brief[]>([])
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [catalogSource, setCatalogSource] = useState<CatalogSource | null>(null)
   const reqId = useRef(0)
   const queryRef = useRef(query)
   queryRef.current = query
@@ -53,6 +58,7 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
     if (!q) {
       setResults([])
       setSearchError(null)
+      setCatalogSource(null)
       return
     }
     const id = ++reqId.current
@@ -61,10 +67,18 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
     try {
       const data = (await searchCardsRepo(nextLang, q)) as Brief[]
       if (id !== reqId.current) return
+      const source = getLastCatalogSource()
       setResults(data)
+      setCatalogSource(source)
+      if (data.length === 0 && source === 'pokemontcg') {
+        setSearchError('Nenhuma carta encontrada no catálogo temporário. Tente outro termo.')
+      } else {
+        setSearchError(null)
+      }
     } catch {
       if (id !== reqId.current) return
       setResults([])
+      setCatalogSource(null)
       setSearchError('Catálogo indisponível no momento. Tente novamente.')
     } finally {
       if (id === reqId.current) setLoading(false)
@@ -136,6 +150,12 @@ export function ManualCardSearchModal({ open, onClose, onPick, reason = 'none' }
             <button type="submit">Buscar</button>
           </form>
         </div>
+
+        {catalogSource === 'pokemontcg' && !searchError && (
+          <p className="catalog-fallback-banner" role="status">
+            Catálogo temporário: TCGdex indisponível — resultados em inglês via Pokémon TCG API.
+          </p>
+        )}
 
         <div className="add-body">
           <div className="add-results" style={{ gridColumn: '1 / -1' }}>

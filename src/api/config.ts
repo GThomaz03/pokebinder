@@ -6,6 +6,7 @@ export const API_CONFIG = {
     assetsBaseUrl: 'https://assets.tcgdex.net',
   },
   pokemonTcgIo: {
+    apiBaseUrl: 'https://api.pokemontcg.io/v2',
     imagesBaseUrl: 'https://images.pokemontcg.io',
   },
   fx: {

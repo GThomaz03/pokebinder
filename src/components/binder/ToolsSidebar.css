@@ -176,13 +176,133 @@
   padding: 0.55rem;
 }
 
+.tool-panel.collections {
+  width: min(300px, calc(100vw - 100px));
+}
+
+.collections-list,
+.collections-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.collections-set-btn,
+.collections-card-btn {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.4rem 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.collections-set-btn:hover,
+.collections-card-btn:hover {
+  border-color: var(--accent);
+}
+
+.collections-set-logo {
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.collections-set-logo img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.collections-set-logo-ph {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--slot, var(--surface-2));
+}
+
+.collections-set-meta,
+.collections-card-meta {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.collections-set-meta strong,
+.collections-card-meta strong {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collections-set-meta small,
+.collections-card-meta small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.collections-detail-head {
+  display: grid;
+  gap: 0.15rem;
+  margin-bottom: 0.55rem;
+}
+
+.collections-detail-head strong {
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.collections-detail-head span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.collections-back {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0;
+  margin-bottom: 0.15rem;
+  text-align: left;
+  width: fit-content;
+}
+
+.collections-card-art {
+  width: 2.4rem;
+  height: 3.3rem;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.collections-card-art .card-img-root {
+  width: 100%;
+  height: 100%;
+}
+
 @media (max-width: 900px) {
   .tools-side {
     position: relative;
     top: 0;
     width: 100%;
     grid-auto-flow: column;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
   .tool-panel,

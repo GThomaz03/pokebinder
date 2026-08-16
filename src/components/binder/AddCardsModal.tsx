@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { searchCardsRepo } from '../../api/cards/cardRepository'
+import {
+  getLastCatalogSource,
+  searchCardsRepo,
+  type CatalogSource,
+} from '../../api/cards/cardRepository'
 import { hydrateCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { CardSkeletonGrid } from '../Skeleton'
@@ -29,6 +33,7 @@ type SearchCache = {
   lang: CardLang
   query: string
   results: Brief[]
+  source: CatalogSource | null
 }
 
 /** Module-level cache so reopening the modal does not refetch the last search. */
@@ -61,6 +66,9 @@ export function AddCardsModal({
   const [qtyById, setQtyById] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [catalogSource, setCatalogSource] = useState<CatalogSource | null>(
+    () => lastSearch?.source ?? null,
+  )
   const [addToCurrent, setAddToCurrent] = useState(true)
   const reqId = useRef(0)
   const queryRef = useRef(query)
@@ -75,6 +83,7 @@ export function AddCardsModal({
     if (!q) {
       setResults([])
       setSearchError(null)
+      setCatalogSource(null)
       return
     }
 
@@ -85,6 +94,7 @@ export function AddCardsModal({
       lastSearch.results.length > 0
     ) {
       setResults(lastSearch.results)
+      setCatalogSource(lastSearch.source)
       setSearchError(null)
       return
     }
@@ -95,13 +105,20 @@ export function AddCardsModal({
     try {
       const data = (await searchCardsRepo(nextLang, q)) as Brief[]
       if (id !== reqId.current) return
+      const source = getLastCatalogSource()
       for (const card of data) seedCardBrief(card)
       setResults(data)
-      lastSearch = { lang: nextLang, query: q, results: data }
-      if (data.length === 0) setSearchError(null)
+      setCatalogSource(source)
+      lastSearch = { lang: nextLang, query: q, results: data, source }
+      if (data.length === 0 && source === 'pokemontcg') {
+        setSearchError('Nenhuma carta encontrada no catálogo temporário. Tente outro termo.')
+      } else {
+        setSearchError(null)
+      }
     } catch {
       if (id !== reqId.current) return
       setResults([])
+      setCatalogSource(null)
       setSearchError('Catálogo indisponível no momento. Tente novamente.')
     } finally {
       if (id === reqId.current) setLoading(false)
@@ -117,6 +134,7 @@ export function AddCardsModal({
     if (lastSearch && lastSearch.lang === lang) {
       setQuery(lastSearch.query)
       setResults(lastSearch.results)
+      setCatalogSource(lastSearch.source)
       return
     }
     const q = queryRef.current.trim()
@@ -223,6 +241,12 @@ export function AddCardsModal({
             <button type="submit">Buscar</button>
           </form>
         </div>
+
+        {catalogSource === 'pokemontcg' && !searchError && (
+          <p className="catalog-fallback-banner" role="status">
+            Catálogo temporário: TCGdex indisponível — resultados em inglês via Pokémon TCG API.
+          </p>
+        )}
 
         <div className="add-body">
           <div className="add-results">

@@ -11,8 +11,19 @@ import type {
   SetMeta,
 } from './types'
 import { tcgdexCardProvider } from './tcgdexCardProvider'
+import { isTcgdexAvailable, getCachedTcgdexAvailability } from './tcgdexHealth'
+import { getPokemonTcgCardById, searchPokemonTcgCards } from './pokemonTcgProvider'
 
 let activeProvider: CardProvider = tcgdexCardProvider
+
+export type CatalogSource = 'tcgdex' | 'pokemontcg'
+
+/** Source used by the most recent search / getById (for UI banners). */
+let lastCatalogSource: CatalogSource | null = null
+
+export function getLastCatalogSource(): CatalogSource | null {
+  return lastCatalogSource
+}
 
 /** Allow swapping catalog provider in tests / future backends. */
 export function setCardProvider(provider: CardProvider) {
@@ -27,11 +38,34 @@ export async function getCardById(
   lang: CardLang,
   id: string,
 ): Promise<NormalizedCard | null> {
-  try {
-    return await activeProvider.getById(lang, id)
-  } catch {
-    return null
+  if (getCachedTcgdexAvailability() === false) {
+    lastCatalogSource = 'pokemontcg'
+    return getPokemonTcgCardById(lang, id)
   }
+
+  if (getCachedTcgdexAvailability() === null && !(await isTcgdexAvailable())) {
+    lastCatalogSource = 'pokemontcg'
+    return getPokemonTcgCardById(lang, id)
+  }
+
+  try {
+    const card = await activeProvider.getById(lang, id)
+    if (card) {
+      lastCatalogSource = 'tcgdex'
+      return card
+    }
+  } catch {
+    /* try fallback */
+  }
+
+  if (!(await isTcgdexAvailable())) {
+    const fallback = await getPokemonTcgCardById(lang, id)
+    lastCatalogSource = 'pokemontcg'
+    return fallback
+  }
+
+  lastCatalogSource = 'tcgdex'
+  return null
 }
 
 export async function searchCardsRepo(
@@ -39,11 +73,39 @@ export async function searchCardsRepo(
   query: string,
   page = 1,
 ): Promise<CardBrief[]> {
-  try {
-    return await activeProvider.search(lang, query, page)
-  } catch {
-    return []
+  // Skip a known-down TCGdex so add-card search stays responsive during outages.
+  if (getCachedTcgdexAvailability() === false) {
+    lastCatalogSource = 'pokemontcg'
+    return searchPokemonTcgCards(query, page)
   }
+
+  // Cold cache: probe first (≤3s) instead of waiting on multi-call SDK retries.
+  if (getCachedTcgdexAvailability() === null && !(await isTcgdexAvailable())) {
+    lastCatalogSource = 'pokemontcg'
+    return searchPokemonTcgCards(query, page)
+  }
+
+  let primary: CardBrief[] = []
+  try {
+    primary = await activeProvider.search(lang, query, page)
+  } catch {
+    primary = []
+  }
+
+  if (primary.length > 0) {
+    lastCatalogSource = 'tcgdex'
+    return primary
+  }
+
+  // Empty may mean "no matches" or a swallowed TCGdex outage — probe before failover.
+  if (await isTcgdexAvailable()) {
+    lastCatalogSource = 'tcgdex'
+    return primary
+  }
+
+  const fallback = await searchPokemonTcgCards(query, page)
+  lastCatalogSource = 'pokemontcg'
+  return fallback
 }
 
 export async function searchCardsAdvancedRepo(
