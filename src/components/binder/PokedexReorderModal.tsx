@@ -14,7 +14,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { getPokedexName, listPokedexSlots } from '../../lib/binderUtils'
+import { getPokedexName, isPokedexOwned, listPokedexSlots } from '../../lib/binderUtils'
 import type { Binder, PokedexSlot } from '../../types'
 import { DexSprite } from './DexSprite'
 import './PokedexReorderModal.css'
@@ -114,7 +114,7 @@ export function PokedexReorderModal({ open, binder, onClose, onSave }: Props) {
                   id={item.key}
                   index={index}
                   dexId={item.dexId}
-                  owned={item.slot.ownedCardIds.length > 0 || Boolean(item.slot.topCardId)}
+                  owned={isPokedexOwned(item.slot, binder.kind)}
                 />
               ))}
             </ul>

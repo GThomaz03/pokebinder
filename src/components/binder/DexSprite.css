@@ -18,6 +18,11 @@
   pointer-events: none;
 }
 
+.dex-sprite.is-pixel img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 .dex-sprite img.is-shown {
   opacity: 1;
 }

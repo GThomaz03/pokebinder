@@ -80,7 +80,7 @@ export function BinderSettings({ binder, open, onClose, adapters, embedded }: Pr
             </div>
             {binder.kind === 'pokedex' && !adapters && (
               <div className="settings-inline-action">
-                <span>Marcar tudo como faltando</span>
+                <span>Marcar tudo como faltando (mantém a carta do topo)</span>
                 <button type="button" className="btn-soft" onClick={() => setAllMissing()}>
                   Resetar
                 </button>

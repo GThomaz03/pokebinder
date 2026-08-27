@@ -261,8 +261,11 @@ export async function fetchSpeciesVariantsRepo(
   speciesName: string,
 ): Promise<CardVariant[]> {
   try {
-    return await activeProvider.fetchSpeciesVariants(lang, dexId, speciesName)
+    const variants = await activeProvider.fetchSpeciesVariants(lang, dexId, speciesName)
+    lastCatalogSource = getCachedTcgdexAvailability() === false ? 'pokemontcg' : 'tcgdex'
+    return variants
   } catch {
+    lastCatalogSource = 'pokemontcg'
     return []
   }
 }

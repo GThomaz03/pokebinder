@@ -213,7 +213,39 @@ export async function hydrateCard(
     if (!raw && fetchLang !== 'en') {
       raw = (await getCard('en', cardId)) as typeof raw
     }
-    if (!raw?.id) return existing ?? null
+    if (!raw?.id) {
+      const localId =
+        existing?.localId ||
+        (cardId.includes('-') ? cardId.slice(cardId.lastIndexOf('-') + 1) : '')
+      const image =
+        existing?.image ||
+        inferMissingImageCandidates({
+          cardId,
+          name: existing?.name,
+          localId,
+        })[0]
+      if (!image && !existing) return null
+      const stub: CachedCard = {
+        id: cardId,
+        name: existing?.name || cardId,
+        localId: String(localId),
+        image,
+        setName: existing?.setName,
+        setId:
+          existing?.setId ??
+          (cardId.includes('-') ? cardId.slice(0, cardId.lastIndexOf('-')) : undefined),
+        illustrator: existing?.illustrator,
+        rarity: existing?.rarity,
+        types: existing?.types,
+        dexId: existing?.dexId,
+        price: existing?.price ?? { updated: 0 },
+      }
+      if (!existing) {
+        cardCache = { ...cardCache, [cardId]: stub }
+        persistCards()
+      }
+      return existing ?? stub
+    }
 
     let image = cardImageUrl(raw.image, 'high')
     if (!image && fetchLang !== 'en') {

@@ -4,33 +4,47 @@ import './DexSprite.css'
 
 const ART_URL = (id: number) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
-const FALLBACK_URL = (id: number) =>
+const PIXEL_URL = (id: number) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
+
+export type DexSpriteVariant = 'art' | 'pixel'
 
 type Props = {
   dexId: number
   className?: string
   alt?: string
+  /** Official artwork (default) or classic pixel sprite. */
+  variant?: DexSpriteVariant
 }
 
-/** Official Pokémon artwork with simple sprite fallback. */
-export function DexSprite({ dexId, className = '', alt = '' }: Props) {
-  const [phase, setPhase] = useState<'art' | 'fallback' | 'empty'>('art')
+/** Pokémon artwork with optional pixel sprite mode. */
+export function DexSprite({
+  dexId,
+  className = '',
+  alt = '',
+  variant = 'art',
+}: Props) {
+  const [phase, setPhase] = useState<'primary' | 'fallback' | 'empty'>('primary')
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    setPhase('art')
+    setPhase('primary')
     setLoaded(false)
-  }, [dexId])
+  }, [dexId, variant])
 
-  const src = phase === 'fallback' ? FALLBACK_URL(dexId) : ART_URL(dexId)
+  const primaryUrl = variant === 'pixel' ? PIXEL_URL(dexId) : ART_URL(dexId)
+  const fallbackUrl = variant === 'pixel' ? ART_URL(dexId) : PIXEL_URL(dexId)
+  const src = phase === 'fallback' ? fallbackUrl : primaryUrl
 
   return (
-    <span className={`dex-sprite ${className}`.trim()} data-dex={dexId}>
+    <span
+      className={`dex-sprite${variant === 'pixel' ? ' is-pixel' : ''} ${className}`.trim()}
+      data-dex={dexId}
+    >
       {!loaded && phase !== 'empty' && <span className="sk sk-fill" aria-hidden />}
       {phase !== 'empty' ? (
         <img
-          key={`${dexId}-${phase}`}
+          key={`${dexId}-${variant}-${phase}`}
           src={src}
           alt={alt}
           loading="lazy"
@@ -38,7 +52,7 @@ export function DexSprite({ dexId, className = '', alt = '' }: Props) {
           className={loaded ? 'is-shown' : ''}
           onLoad={() => setLoaded(true)}
           onError={() => {
-            if (phase === 'art') {
+            if (phase === 'primary') {
               setLoaded(false)
               setPhase('fallback')
             } else {

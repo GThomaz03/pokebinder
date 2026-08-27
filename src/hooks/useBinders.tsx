@@ -461,12 +461,17 @@ export function BindersProvider({ children }: { children: ReactNode }) {
               type: 'pokedex',
               dexId: s.dexId,
             }
-            if (next.topCardId && !next.ownedCardIds.includes(next.topCardId)) {
-              next.ownedCardIds = [...next.ownedCardIds, next.topCardId]
-            }
-            // Wishlist: new display card starts as missing unless explicitly obtained
+            // Wishlist: "wanted" list includes the display card
             if (
               b.kind === 'wishlist' &&
+              next.topCardId &&
+              !next.ownedCardIds.includes(next.topCardId)
+            ) {
+              next.ownedCardIds = [...next.ownedCardIds, next.topCardId]
+            }
+            // New display card starts as missing unless explicitly obtained
+            if (
+              (b.kind === 'wishlist' || b.kind === 'pokedex') &&
               patch.topCardId !== undefined &&
               patch.topCardId !== s.topCardId &&
               patch.obtained === undefined
@@ -501,7 +506,8 @@ export function BindersProvider({ children }: { children: ReactNode }) {
           ...p,
           slots: p.slots.map((s) =>
             s?.type === 'pokedex'
-              ? { ...s, ownedCardIds: [], topCardId: undefined, obtained: false }
+              ? // Keep desired top card; clear ownership so slots go grayscale
+                { ...s, ownedCardIds: [], obtained: false }
               : s,
           ),
         }))
@@ -520,10 +526,11 @@ export function BindersProvider({ children }: { children: ReactNode }) {
           const slots = [...p.slots]
           const s = slots[ref.slotIndex]
           if (s?.type === 'pokedex') {
+            // Keep desired card art; mark as missing (same idea as wishlist toggle)
             slots[ref.slotIndex] = {
               ...s,
               ownedCardIds: [],
-              topCardId: undefined,
+              obtained: false,
             }
           } else if (s?.type === 'card') {
             slots[ref.slotIndex] = { ...s, missing: !s.missing }

@@ -6,11 +6,20 @@ const PROBE_TIMEOUT_MS = 3_000
 let cached: { ok: boolean; at: number } | null = null
 let inflight: Promise<boolean> | null = null
 
+export function isTcgdexApiUrl(url: string): boolean {
+  return /api\.tcgdex\.net/i.test(url) || /\/api\/tcgdex(\/|\?|$)/i.test(url)
+}
+
 /** Cached probe result without network — `null` when stale / unknown. */
 export function getCachedTcgdexAvailability(): boolean | null {
   if (!cached) return null
   if (Date.now() - cached.at >= CACHE_MS) return null
   return cached.ok
+}
+
+/** Record a failed origin so callers skip further TCGdex traffic for CACHE_MS. */
+export function markTcgdexUnavailable() {
+  cached = { ok: false, at: Date.now() }
 }
 
 /**

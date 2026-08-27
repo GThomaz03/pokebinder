@@ -2,6 +2,8 @@ import TCGdex, { Query } from '@tcgdex/sdk'
 import type { CardLang, CardPrice } from '../types'
 import { API_CONFIG } from './config'
 import { CatalogError, fetchJson } from './cards/http'
+import { getCachedTcgdexAvailability, isTcgdexAvailable } from './cards/tcgdexHealth'
+import { fetchPokemonTcgSpeciesVariantEntries } from './cards/pokemonTcgProvider'
 import { baseCardId, parseOwnedKey } from './cardKeys'
 import {
   cardImageCandidates,
@@ -61,6 +63,7 @@ export function getClient(lang: CardLang): TCGdex {
   let client = clients.get(lang)
   if (!client) {
     client = new TCGdex(lang)
+    client.setEndpoint(API_CONFIG.tcgdex.baseUrl)
     clients.set(lang, client)
   }
   return client
@@ -697,6 +700,10 @@ export async function fetchDeckCardMeta(
 
 export async function getCard(lang: CardLang, id: string) {
   const cardId = baseCardId(id)
+  if (getCachedTcgdexAvailability() === false) return undefined
+  if (getCachedTcgdexAvailability() === null && !(await isTcgdexAvailable())) {
+    return undefined
+  }
   // Prefer REST over the SDK here: @tcgdex/sdk writes every response to
   // localStorage (`tcgdex-cache`). When the quota is full (common in prod with
   // RQ persist + our own caches), `cache.set` throws AFTER a successful fetch
@@ -714,6 +721,8 @@ export async function getCard(lang: CardLang, id: string) {
       /* try next lang / fall through */
     }
   }
+
+  if (getCachedTcgdexAvailability() === false) return undefined
 
   // Last resort: SDK (may still fail if localStorage is full)
   try {
@@ -839,6 +848,33 @@ function expandCardVariants(card: FullCardLike): CardVariantEntry[] {
  * details/images in the requested nationality (pt/en/ja).
  */
 export async function fetchSpeciesVariants(
+  lang: CardLang,
+  dexId: number,
+  speciesName: string,
+): Promise<CardVariantEntry[]> {
+  const tcgdexUp =
+    getCachedTcgdexAvailability() === true ||
+    (getCachedTcgdexAvailability() === null && (await isTcgdexAvailable()))
+
+  if (!tcgdexUp) {
+    return fetchPokemonTcgSpeciesVariantEntries(lang, dexId, speciesName)
+  }
+
+  try {
+    const variants = await fetchSpeciesVariantsFromTcgdex(lang, dexId, speciesName)
+    if (variants.length) return variants
+  } catch {
+    /* fallback below */
+  }
+
+  if (getCachedTcgdexAvailability() === false || !(await isTcgdexAvailable())) {
+    return fetchPokemonTcgSpeciesVariantEntries(lang, dexId, speciesName)
+  }
+
+  return []
+}
+
+async function fetchSpeciesVariantsFromTcgdex(
   lang: CardLang,
   dexId: number,
   speciesName: string,

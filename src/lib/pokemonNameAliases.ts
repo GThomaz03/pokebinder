@@ -20,11 +20,15 @@ const DIFF_ALIASES: Array<{ pt: string; en: string }> = Object.entries(PT_TO_EN)
   .sort((a, b) => b.pt.length - a.pt.length)
 
 const EN_BY_NORM = new Map<string, string>()
-for (const p of pokedex as Array<{ name: string }>) {
+const DEX_BY_NORM = new Map<string, number>()
+for (const p of pokedex as Array<{ id: number; name: string }>) {
   EN_BY_NORM.set(normalizeKey(p.name), p.name)
+  DEX_BY_NORM.set(normalizeKey(p.name), p.id)
 }
 for (const [pt, en] of Object.entries(PT_TO_EN)) {
   EN_BY_NORM.set(normalizeKey(pt), en)
+  const id = DEX_BY_NORM.get(normalizeKey(en))
+  if (id) DEX_BY_NORM.set(normalizeKey(pt), id)
 }
 
 /**
@@ -55,4 +59,20 @@ export function resolvePokemonSearchTerms(query: string): string[] {
   }
 
   return [...terms]
+}
+
+/** National dex number for a species name (PT or EN), or a query that contains one. */
+export function resolveDexId(query: string): number | null {
+  const key = normalizeKey(query)
+  if (!key) return null
+  const exact = DEX_BY_NORM.get(key)
+  if (exact) return exact
+
+  let best: { id: number; len: number } | null = null
+  for (const [name, id] of DEX_BY_NORM) {
+    if (name.length < 4) continue
+    if (!key.includes(name)) continue
+    if (!best || name.length > best.len) best = { id, len: name.length }
+  }
+  return best?.id ?? null
 }

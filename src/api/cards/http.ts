@@ -1,4 +1,9 @@
 import { API_CONFIG } from '../config'
+import {
+  getCachedTcgdexAvailability,
+  isTcgdexApiUrl,
+  markTcgdexUnavailable,
+} from './tcgdexHealth'
 
 export class CatalogError extends Error {
   readonly status?: number
@@ -59,6 +64,10 @@ export async function fetchJson<T>(url: string, opts: FetchJsonOptions = {}): Pr
   const maxRetries = opts.maxRetries ?? API_CONFIG.http.maxRetries
   let lastError: unknown
 
+  if (isTcgdexApiUrl(url) && getCachedTcgdexAvailability() === false) {
+    throw new CatalogError(`TCGdex unavailable: ${url}`, { code: 'network' })
+  }
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController()
     const onAbort = () => controller.abort()
@@ -112,12 +121,20 @@ export async function fetchJson<T>(url: string, opts: FetchJsonOptions = {}): Pr
         throw new CatalogError('Request aborted', { code: 'timeout', cause: err })
       }
       if (isAbort) {
+        if (isTcgdexApiUrl(url)) markTcgdexUnavailable()
         if (attempt < maxRetries) {
           await sleep(API_CONFIG.http.baseBackoffMs * 2 ** attempt)
           continue
         }
         throw new CatalogError(`Timeout after ${timeoutMs}ms: ${url}`, {
           code: 'timeout',
+          cause: err,
+        })
+      }
+      if (isTcgdexApiUrl(url)) {
+        markTcgdexUnavailable()
+        throw new CatalogError(`Network error: ${url}`, {
+          code: 'network',
           cause: err,
         })
       }

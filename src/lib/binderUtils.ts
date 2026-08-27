@@ -333,7 +333,7 @@ export function pokedexProgress(binder: Binder): { owned: number; total: number 
     for (const slot of page.slots) {
       if (slot?.type === 'pokedex') {
         total++
-        if (slot.ownedCardIds.length > 0 || slot.topCardId) owned++
+        if (isPokedexOwned(slot, binder.kind)) owned++
       }
     }
   }
@@ -369,4 +369,21 @@ export function binderTotalBrl(binder: Binder): number {
 
 export function getPokedexName(dexId: number): string {
   return POKEDEX.find((p) => p.id === dexId)?.name ?? `#${dexId}`
+}
+
+/**
+ * Whether a Pokédex/wishlist slot counts as "have it".
+ * Wishlist: only `obtained === true`.
+ * Pokédex: `obtained` when set; legacy slots (no flag) treat any card association as owned.
+ */
+export function isPokedexOwned(
+  slot: Extract<Slot, { type: 'pokedex' }>,
+  kind: Binder['kind'],
+): boolean {
+  if (kind === 'wishlist') return slot.obtained === true
+  if (kind !== 'pokedex') return false
+  if (slot.obtained === true) return true
+  if (slot.obtained === false) return false
+  // Legacy collection slots created before obtained was used on pokedex binders
+  return slot.ownedCardIds.length > 0 || Boolean(slot.topCardId)
 }

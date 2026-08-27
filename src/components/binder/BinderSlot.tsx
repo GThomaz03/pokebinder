@@ -12,7 +12,7 @@ import { slotDragId, slotDropId, type SlotDragData, type SlotDropData } from '..
 import { CardImage } from '../CardImage'
 import { useCard, useFxRates } from '../../hooks/useCardQueries'
 import { useLanguage } from '../../hooks/useLanguage'
-import { getPokedexName } from '../../lib/binderUtils'
+import { getPokedexName, isPokedexOwned } from '../../lib/binderUtils'
 import {
   ownerTipPlacement,
   type OwnerTipPlacement,
@@ -236,22 +236,20 @@ export function BinderSlot({
     slot?.type === 'pokedex' && !slot.topCardId && slot.ownedCardIds.length === 0
   const cardMarkedMissing = slot?.type === 'card' && Boolean(slot.missing)
 
-  const wishlistObtained =
-    binder.kind === 'wishlist' &&
+  const speciesHasCard =
+    (binder.kind === 'wishlist' || binder.kind === 'pokedex') &&
     slot?.type === 'pokedex' &&
-    Boolean(slot.topCardId) &&
-    Boolean(slot.obtained)
+    Boolean(slot.topCardId)
 
-  const wishlistMissing =
-    binder.kind === 'wishlist' &&
-    slot?.type === 'pokedex' &&
-    Boolean(slot.topCardId) &&
-    !slot.obtained
+  const speciesObtained =
+    speciesHasCard && slot?.type === 'pokedex' && isPokedexOwned(slot, binder.kind)
+
+  const speciesMissing = speciesHasCard && !speciesObtained
 
   // Visual only — never changes obtained/missing status on the slot
   const dim =
     settings.dimMissing &&
-    (wishlistMissing ||
+    (speciesMissing ||
       cardMarkedMissing ||
       isMissingPokedex ||
       slot === null)
@@ -449,32 +447,35 @@ export function BinderSlot({
             )}
             {onMarkMissing &&
               slot?.type === 'pokedex' &&
-              binder.kind === 'wishlist' &&
+              (binder.kind === 'wishlist' || binder.kind === 'pokedex') &&
               Boolean(slot.topCardId) && (
                 <button
                   type="button"
                   title={
-                    wishlistObtained ? 'Marcar como faltante' : 'Marcar como obtida'
+                    speciesObtained ? 'Marcar como faltante' : 'Marcar como obtida'
                   }
                   aria-label={
-                    wishlistObtained ? 'Marcar como faltante' : 'Marcar como obtida'
+                    speciesObtained ? 'Marcar como faltante' : 'Marcar como obtida'
                   }
-                  className={wishlistObtained ? 'active' : ''}
+                  className={speciesObtained ? 'active' : ''}
                   onClick={() => run(onMarkMissing)}
                 >
-                  {wishlistObtained ? '–' : '✓'}
+                  {speciesObtained ? '–' : '✓'}
                 </button>
               )}
-            {onMarkMissing && slot?.type === 'pokedex' && binder.kind !== 'wishlist' && (
-              <button
-                type="button"
-                title="Marcar faltante"
-                aria-label="Marcar faltante"
-                onClick={() => run(onMarkMissing)}
-              >
-                –
-              </button>
-            )}
+            {onMarkMissing &&
+              slot?.type === 'pokedex' &&
+              binder.kind === 'pokedex' &&
+              !slot.topCardId && (
+                <button
+                  type="button"
+                  title="Marcar faltante"
+                  aria-label="Marcar faltante"
+                  onClick={() => run(onMarkMissing)}
+                >
+                  –
+                </button>
+              )}
           </div>
         </>
       )}

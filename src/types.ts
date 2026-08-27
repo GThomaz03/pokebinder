@@ -26,9 +26,14 @@ export type PokedexSlot = {
   dexId: number
   /** Owned (collection) or wanted (wishlist) card keys */
   ownedCardIds: string[]
+  /** Card shown in the binder slot (desired target; may be unowned) */
   topCardId?: string
   pinned?: boolean
-  /** Wishlist: marked as obtained (default missing / grayscale) */
+  /**
+   * Have / don't have for the display card.
+   * Wishlist + Pokédex collection: false/undefined = missing (grayscale), true = obtained.
+   * Legacy Pokédex slots without this flag treat any topCardId/ownedCardIds as owned.
+   */
   obtained?: boolean
 }
 

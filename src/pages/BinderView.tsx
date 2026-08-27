@@ -6,6 +6,7 @@ import { BinderSpread } from '../components/binder/BinderSpread'
 import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { PokedexPanel } from '../components/binder/PokedexPanel'
 import { PokedexReorderModal } from '../components/binder/PokedexReorderModal'
+import { PlaceholderWizard } from '../components/binder/PlaceholderWizard'
 import { ToolsSidebar } from '../components/binder/ToolsSidebar'
 import { useBinders } from '../hooks/useBinders'
 import { useInventory } from '../hooks/useInventory'
@@ -65,6 +66,7 @@ export function BinderViewPage() {
   const [inspectRef, setInspectRef] = useState<SlotRef | null>(null)
   const [priceTick, setPriceTick] = useState(0)
   const [reorderOpen, setReorderOpen] = useState(false)
+  const [placeholdersOpen, setPlaceholdersOpen] = useState(false)
 
   const isRepository = storedBinder?.kind === 'repository'
 
@@ -86,7 +88,8 @@ export function BinderViewPage() {
     addOpen ||
     Boolean(dexEdit) ||
     Boolean(detailsKey) ||
-    reorderOpen
+    reorderOpen ||
+    placeholdersOpen
 
   const pages = binder?.pages ?? []
   const totalSpreads = Math.max(1, Math.ceil(pages.length / 2))
@@ -373,6 +376,16 @@ export function BinderViewPage() {
           ) : (
             <span className="kind-pill">{kindLabel}</span>
           )}
+          {(binder.kind === 'pokedex' || binder.kind === 'wishlist') && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setPlaceholdersOpen(true)}
+              title="Gerar placeholders para imprimir"
+            >
+              Placeholders
+            </button>
+          )}
           {inventoryCountLabel && (
             <span className="binder-total" title="Quantidade total no inventário">
               {inventoryCountLabel}
@@ -549,13 +562,31 @@ export function BinderViewPage() {
               binder.kind === 'repository'
                 ? undefined
                 : (ref) => {
-              if (binder.kind === 'wishlist') {
+              if (binder.kind === 'wishlist' || binder.kind === 'pokedex') {
                 const s = binder.pages[ref.pageIndex]?.slots[ref.slotIndex]
-                if (s?.type !== 'pokedex' || !s.topCardId) return
-                const nextObtained = !s.obtained
-                updatePokedexSlot(binder.id, ref.pageIndex, ref.slotIndex, {
-                  obtained: nextObtained,
-                })
+                if (s?.type !== 'pokedex') return
+                if (s.topCardId) {
+                  const nextObtained = !s.obtained
+                  if (binder.kind === 'wishlist') {
+                    updatePokedexSlot(binder.id, ref.pageIndex, ref.slotIndex, {
+                      obtained: nextObtained,
+                    })
+                    return
+                  }
+                  // Pokédex collection: toggle have/don't have, keep desired card
+                  updatePokedexSlot(binder.id, ref.pageIndex, ref.slotIndex, {
+                    obtained: nextObtained,
+                    ownedCardIds: nextObtained
+                      ? s.ownedCardIds.length > 0
+                        ? s.ownedCardIds
+                        : [s.topCardId]
+                      : [],
+                  })
+                  return
+                }
+                if (binder.kind === 'pokedex') {
+                  markSlotMissing(binder.id, ref)
+                }
                 return
               }
               markSlotMissing(binder.id, ref)
@@ -727,6 +758,14 @@ export function BinderViewPage() {
           binder={binder}
           onClose={() => setReorderOpen(false)}
           onSave={(orderedDexIds) => reorderPokedexSlots(binder.id, orderedDexIds)}
+        />
+      )}
+
+      {(binder.kind === 'pokedex' || binder.kind === 'wishlist') && (
+        <PlaceholderWizard
+          open={placeholdersOpen}
+          binder={binder}
+          onClose={() => setPlaceholdersOpen(false)}
         />
       )}
     </div>

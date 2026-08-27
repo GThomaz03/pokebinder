@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { fetchSpeciesVariants, type CardVariantEntry } from '../../api/tcgdex'
+import { getCachedTcgdexAvailability } from '../../api/cards/tcgdexHealth'
 import { cacheVariantPrice, ESTIMATED_BRL_HINT, formatPrice, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { CardSkeletonGrid } from '../Skeleton'
@@ -36,6 +37,7 @@ export function PokedexPanel({
   const [variants, setVariants] = useState<CardVariantEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
+  const [catalogFallback, setCatalogFallback] = useState(false)
   const speciesName = getPokedexName(slot.dexId)
 
   useEffect(() => {
@@ -48,10 +50,12 @@ export function PokedexPanel({
     setLoading(true)
     setQuery('')
     setVariants([])
+    setCatalogFallback(false)
     fetchSpeciesVariants(cardLang, slot.dexId, speciesName)
       .then((data) => {
         if (cancelled) return
         setVariants(data)
+        setCatalogFallback(getCachedTcgdexAvailability() === false)
         for (const v of data) {
           seedCardBrief({
             id: v.cardId,
@@ -105,23 +109,49 @@ export function PokedexPanel({
     const owned = new Set(slot.ownedCardIds)
     if (owned.has(key)) {
       owned.delete(key)
-      onChange({
-        ownedCardIds: [...owned],
-        topCardId: slot.topCardId === key ? undefined : slot.topCardId,
-      })
+      const nextOwned = [...owned]
+      if (isWishlist) {
+        onChange({
+          ownedCardIds: nextOwned,
+          topCardId: slot.topCardId === key ? undefined : slot.topCardId,
+        })
+      } else {
+        onChange({
+          ownedCardIds: nextOwned,
+          topCardId: slot.topCardId,
+          obtained: nextOwned.length > 0,
+        })
+      }
     } else {
       owned.add(key)
-      onChange({
-        ownedCardIds: [...owned],
-        topCardId: slot.topCardId ?? key,
-      })
+      if (isWishlist) {
+        onChange({
+          ownedCardIds: [...owned],
+          topCardId: slot.topCardId ?? key,
+        })
+      } else {
+        onChange({
+          ownedCardIds: [...owned],
+          topCardId: slot.topCardId ?? key,
+          obtained: true,
+        })
+      }
     }
   }
 
   function setTop(key: string) {
-    const owned = new Set(slot.ownedCardIds)
-    owned.add(key)
-    onChange({ ownedCardIds: [...owned], topCardId: key })
+    if (isWishlist) {
+      const owned = new Set(slot.ownedCardIds)
+      owned.add(key)
+      onChange({ ownedCardIds: [...owned], topCardId: key })
+      return
+    }
+    // Collection: pin desired card without forcing ownership
+    const alreadyOwned = slot.ownedCardIds.includes(key)
+    onChange({
+      topCardId: key,
+      obtained: alreadyOwned ? true : false,
+    })
   }
 
   const natLabel = NATIONALITIES.find((n) => n.value === cardLang)?.label ?? cardLang
@@ -143,7 +173,9 @@ export function PokedexPanel({
               {loading
                 ? `Carregando versões (${natLabel})…`
                 : `${filtered.length} de ${variants.length} versões · ${natLabel}${
-                    isWishlist ? ' · lista desejada' : ''
+                    isWishlist
+                      ? ' · lista desejada'
+                      : ' · defina a carta e marque Tenho quando conseguir'
                   }`}
             </p>
           </div>
@@ -178,12 +210,20 @@ export function PokedexPanel({
           />
         </div>
 
+        {catalogFallback && (
+          <p className="dex-fallback-banner" role="status">
+            Catálogo temporário: TCGdex indisponível — versões em inglês via Pokémon TCG API.
+          </p>
+        )}
+
         <div className="dex-modal-body">
           {loading && <CardSkeletonGrid count={12} />}
 
           {!loading && filtered.length === 0 && (
             <p className="state">
-              Nenhuma carta encontrada para {natLabel}. Tente outra nacionalidade.
+              {catalogFallback
+                ? `Nenhuma carta encontrada no catálogo temporário para ${speciesName}. Tente outro termo ou aguarde o TCGdex voltar.`
+                : `Nenhuma carta encontrada para ${natLabel}. Tente outra nacionalidade.`}
             </p>
           )}
 
@@ -248,7 +288,7 @@ export function PokedexPanel({
                         onClick={() => setTop(card.key)}
                         aria-pressed={isTop}
                       >
-                        {isTop ? 'No topo' : 'Usar no topo'}
+                        {isTop ? 'No topo' : isWishlist ? 'Usar no topo' : 'Definir carta'}
                       </button>
                     </div>
                   </div>
