@@ -127,6 +127,18 @@ export function validateDeck(
     })
   }
 
+  let nonStandard = 0
+  for (const card of deck.cards) {
+    if (card.legalStandard === false) nonStandard += card.qty
+  }
+  if (nonStandard > 0) {
+    issues.push({
+      code: 'format-standard',
+      severity: 'warn',
+      message: `${nonStandard} carta(s) não estão legais no formato Standard (TCGdex).`,
+    })
+  }
+
   let ownedNeeded = 0
   let missingNeeded = 0
   for (const card of deck.cards) {
@@ -182,7 +194,7 @@ export function detectBasicEnergy(opts: {
 }): boolean {
   if (opts.category !== 'Energy') return false
   if (opts.energyType && /special/i.test(opts.energyType)) return false
-  if (opts.energyType && /normal/i.test(opts.energyType)) return true
+  if (opts.energyType && /(normal|basic)/i.test(opts.energyType)) return true
   // Fallback: basic energies rarely have long rules text
   if (opts.effect && opts.effect.trim().length > 40) return false
   return /energy|energia/i.test(opts.name)

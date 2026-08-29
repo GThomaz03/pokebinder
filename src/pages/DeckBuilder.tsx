@@ -377,6 +377,8 @@ export function DeckBuilderPage() {
         localId: meta?.localId ?? String(card.localId),
         image: meta?.image ?? card.image,
         regulationMark: meta?.regulationMark,
+        legalStandard: meta?.legalStandard,
+        legalExpanded: meta?.legalExpanded,
         trainerType: meta?.trainerType,
         energyType: meta?.energyType,
         isBasicEnergy: meta?.isBasicEnergy,

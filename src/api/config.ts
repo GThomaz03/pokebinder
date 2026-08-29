@@ -1,21 +1,11 @@
 /** Centralized API / cache configuration for catalog, prices, FX and images. */
 
-const TCGDEX_ORIGIN = 'https://api.tcgdex.net/v2'
+export const TCGDEX_ORIGIN = 'https://api.tcgdex.net/v2'
 
-function isLocalHostname(host: string): boolean {
-  return (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '[::1]' ||
-    host.endsWith('.local') ||
-    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
-  )
-}
-
-/** Same-origin proxy on deployed hosts; direct origin on local/LAN Vite. */
+/** Same-origin proxy in browser (Vite dev + Vercel prod); direct origin in Node scripts. */
 function tcgdexBaseUrl(): string {
   if (typeof window === 'undefined') return TCGDEX_ORIGIN
-  return isLocalHostname(window.location.hostname) ? TCGDEX_ORIGIN : '/api/tcgdex'
+  return '/api/tcgdex'
 }
 
 export const API_CONFIG = {

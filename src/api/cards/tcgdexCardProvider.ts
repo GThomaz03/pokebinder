@@ -1,11 +1,12 @@
 import type { CardLang } from '../../types'
+import { API_CONFIG } from '../config'
+import { fetchJson } from './http'
 import {
   fetchCardRest,
   fetchDeckCardMeta,
-  fetchSets,
+  fetchSetsMeta,
   fetchSpeciesVariants,
   getCard,
-  getClient,
   searchCards,
   searchCardsAdvanced,
   type CardBrief,
@@ -20,7 +21,6 @@ import type {
   CardVariant,
   NormalizedCard,
   SetCardBrief,
-  SetMeta,
 } from './types'
 
 function mapNormalized(lang: CardLang, raw: Record<string, unknown>): NormalizedCard {
@@ -72,12 +72,6 @@ function variantToInternal(v: CardVariantEntry): CardVariant {
   }
 }
 
-function logoUrl(base?: string): string | undefined {
-  if (!base) return undefined
-  if (/\.(webp|png|jpg|jpeg)$/i.test(base)) return base
-  return `${base}.webp`
-}
-
 /** TCGdex implementation of CardProvider — sole network access to api.tcgdex.net. */
 export const tcgdexCardProvider: CardProvider = {
   async getById(lang, id) {
@@ -95,68 +89,56 @@ export const tcgdexCardProvider: CardProvider = {
   },
 
   async listSets(lang) {
-    const sets = await fetchSets(lang)
+    const sets = await fetchSetsMeta(lang)
     return sets.map((s) => ({ id: s.id, name: s.name }))
   },
 
   async getSet(lang, setId) {
-    try {
-      const set = await getClient(lang).set.get(setId)
-      if (!set?.id) {
-        if (lang !== 'en') return tcgdexCardProvider.getSet('en', setId)
-        return null
-      }
-      const count = set.cardCount as { official?: number; total?: number } | undefined
-      const abbr = (set as { abbreviation?: { official?: string } }).abbreviation?.official
-      const total = count?.total ?? count?.official ?? 0
-      const meta: SetMeta = {
-        id: set.id,
-        name: set.name,
-        logo: logoUrl(set.logo as string | undefined),
-        symbol: logoUrl(set.symbol as string | undefined),
-        cardCount: total,
-        cardCountOfficial: count?.official,
-        releaseDate: (set as { releaseDate?: string }).releaseDate,
-        abbreviation: abbr,
-        serieName: (set as { serie?: { name?: string } }).serie?.name,
-      }
-      return meta
-    } catch {
-      if (lang !== 'en') return tcgdexCardProvider.getSet('en', setId)
-      return null
+    const all = await fetchSetsMeta(lang)
+    const hit = all.find((s) => s.id === setId)
+    if (hit) return hit
+    if (lang !== 'en') {
+      const en = await fetchSetsMeta('en')
+      return en.find((s) => s.id === setId) ?? null
     }
+    return null
   },
 
   async listSetCards(lang, setId) {
-    try {
-      const set = await getClient(lang).set.get(setId)
-      const cards = (set as { cards?: Array<{ id?: string; name?: string; localId?: string | number; image?: string }> } | null)
-        ?.cards
-      if (!cards?.length) {
-        if (lang !== 'en') return tcgdexCardProvider.listSetCards('en', setId)
-        return []
-      }
-      return cards
-        .filter((c) => c?.id)
-        .map((c): SetCardBrief => {
-          const id = String(c.id)
-          const name = String(c.name ?? '')
-          const localId = String(c.localId ?? '')
-          const imageBase = c.image
-          let image = cardImageUrl(imageBase, 'low')
-          if (!image) {
-            image = inferMissingImageCandidates({
-              cardId: id,
-              name,
-              localId,
-            })[0]
-          }
-          return { id, name, localId, image, setId }
-        })
-    } catch {
-      if (lang !== 'en') return tcgdexCardProvider.listSetCards('en', setId)
-      return []
+    type SetWithCards = {
+      cards?: Array<{ id?: string; name?: string; localId?: string | number; image?: string }>
     }
+    const langs: CardLang[] = lang === 'en' ? ['en'] : [lang, 'en']
+    for (const L of langs) {
+      try {
+        const set = await fetchJson<SetWithCards>(
+          `${API_CONFIG.tcgdex.baseUrl}/${L}/sets/${setId}`,
+          { maxRetries: 2 },
+        )
+        const cards = set?.cards
+        if (!cards?.length) continue
+        return cards
+          .filter((c) => c?.id)
+          .map((c): SetCardBrief => {
+            const id = String(c.id)
+            const name = String(c.name ?? '')
+            const localId = String(c.localId ?? '')
+            const imageBase = c.image
+            let image = cardImageUrl(imageBase, 'low')
+            if (!image) {
+              image = inferMissingImageCandidates({
+                cardId: id,
+                name,
+                localId,
+              })[0]
+            }
+            return { id, name, localId, image, setId }
+          })
+      } catch {
+        /* try next lang */
+      }
+    }
+    return []
   },
 
   async fetchSpeciesVariants(lang, dexId, speciesName) {

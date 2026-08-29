@@ -50,6 +50,8 @@ const EXTRA_ABBR = {
   me02: 'me02',
   m2: 'me02',
   pfl: 'me02',
+  me03: 'me03',
+  m3: 'me03',
   ev7: 'ev7',
   ev8: 'ev8',
   ev10: 'ev10',

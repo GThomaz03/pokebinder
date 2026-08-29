@@ -113,6 +113,8 @@ export type DeckEntry = {
   localId?: string
   image?: string
   regulationMark?: string
+  legalStandard?: boolean
+  legalExpanded?: boolean
   trainerType?: string
   energyType?: string
   /** Basic Energy — unlimited copies by name */

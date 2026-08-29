@@ -2,33 +2,10 @@ import type { PriceMarket } from '../../types'
 import { baseCardId } from '../cardKeys'
 import { getFxRates, getCachedFxRates, toBrl } from '../fx/fxProvider'
 import type { PriceProvider, PriceQuote, PriceQuoteOptions, PriceSource } from './types'
+import { extractMarkets, type PricingBlock } from './pricingExtract'
 
-type PricingBlock = {
-  cardmarket?: { avg?: number | null; trend?: number | null; low?: number | null }
-  tcgplayer?: Record<string, { marketPrice?: number | null } | null> | null
-}
-
-function extractMarkets(pricing?: PricingBlock): {
-  cardmarket: number | null
-  tcgplayer: number | null
-} {
-  const cm = pricing?.cardmarket
-  const tp = pricing?.tcgplayer
-  let usd: number | null = null
-  if (tp && typeof tp === 'object') {
-    for (const key of ['normal', 'holofoil', 'reverse-holofoil', '1st-edition-holofoil']) {
-      const p = tp[key]
-      if (p?.marketPrice != null) {
-        usd = p.marketPrice
-        break
-      }
-    }
-  }
-  return {
-    cardmarket: cm?.avg ?? cm?.trend ?? cm?.low ?? null,
-    tcgplayer: usd,
-  }
-}
+export type { PricingBlock } from './pricingExtract'
+export { extractMarkets, extractMarketsForVariant, pricingForVariant } from './pricingExtract'
 
 /** Build a PriceQuote from a TCGdex pricing block (+ optional FX). */
 export async function quoteFromPricing(

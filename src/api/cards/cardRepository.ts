@@ -13,6 +13,7 @@ import type {
 import { tcgdexCardProvider } from './tcgdexCardProvider'
 import { isTcgdexAvailable, getCachedTcgdexAvailability } from './tcgdexHealth'
 import { getPokemonTcgCardById, searchPokemonTcgCards } from './pokemonTcgProvider'
+import { fetchSetsMeta } from '../tcgdex'
 
 let activeProvider: CardProvider = tcgdexCardProvider
 
@@ -228,23 +229,11 @@ export async function listSetCardsRepo(
   return req
 }
 
-/** All sets enriched with meta, newest releaseDate first. */
+/** All sets enriched with meta, newest releaseDate first. Excludes TCG Pocket (tcgp) by default. */
 export async function listAllSetsMeta(lang: CardLang): Promise<SetMeta[]> {
-  const briefs = await listSetsRepo(lang)
-  const map = await getSetsMeta(
-    lang,
-    briefs.map((s) => s.id),
-    8,
-  )
-  const rows: SetMeta[] = briefs.map(
-    (b) =>
-      map[b.id] ?? {
-        id: b.id,
-        name: b.name,
-        cardCount: 0,
-      },
-  )
-  rows.sort((a, b) => {
+  const rows = await fetchSetsMeta(lang)
+  const physical = rows.filter((s) => s.serieId !== 'tcgp')
+  physical.sort((a, b) => {
     const ad = a.releaseDate ?? ''
     const bd = b.releaseDate ?? ''
     if (ad && bd) return bd.localeCompare(ad)
@@ -252,7 +241,7 @@ export async function listAllSetsMeta(lang: CardLang): Promise<SetMeta[]> {
     if (bd) return 1
     return a.name.localeCompare(b.name, 'pt-BR')
   })
-  return rows
+  return physical
 }
 
 export async function fetchSpeciesVariantsRepo(

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatPrice, getCachedCard, hydrateCard } from '../../api/prices'
+import { extractMarketsForVariant } from '../../api/prices/pricingExtract'
 import { baseCardId, getCard, parseOwnedKey } from '../../api/tcgdex'
 import { CardImage } from '../CardImage'
 import { useLanguage } from '../../hooks/useLanguage'
@@ -88,14 +89,13 @@ export function CardDetailsModal({
           for (const v of full.variants_detailed) {
             const extras = [...(v.stamp ?? []), ...(v.foil ? [v.foil] : [])]
             const key = [cardId, fetchLang, v.type, ...extras].join('::')
-            const priceObj = {
-              eur: v.pricing?.cardmarket?.avg ?? full.pricing?.cardmarket?.avg ?? null,
-              usd:
-                v.pricing?.tcgplayer?.normal?.marketPrice ??
-                v.pricing?.tcgplayer?.holofoil?.marketPrice ??
-                null,
-              updated: Date.now(),
-            }
+            const { eur, usd } = extractMarketsForVariant(
+              full.pricing,
+              v.pricing,
+              v.type,
+              settings.priceMarket,
+            )
+            const priceObj = { eur, usd, updated: Date.now() }
             rows.push({
               key,
               label: [v.type, ...extras].filter(Boolean).join(' · '),

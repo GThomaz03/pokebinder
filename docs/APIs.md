@@ -299,21 +299,24 @@ export function getClient(lang: CardLang): TCGdex {
 }
 ```
 
-- Base URL efetiva: `https://api.tcgdex.net/v2/{lang}/...`
-- Header do SDK: `user-agent: @tcgdex/javascript-sdk/2.9.0`
+- Base URL efetiva: `/api/tcgdex/{lang}/...` (proxy Vite em dev + rewrite Vercel em prod → `https://api.tcgdex.net/v2`)
+- **Pokémon TCG Live** usa o mesmo pool físico — não há endpoint separado; o Browse filtra a série `tcgp` (TCG Pocket)
+- Header do SDK: `user-agent: @tcgdex/javascript-sdk/2.9.0` (SDK reservado; catálogo preferencialmente via REST)
 - Sem API key / env var
-- Cache interno do browser (SDK + helpers locais); TTL típico ~1h em caches auxiliares
+- Cache: React Query + caches in-memory; SDK com `setCacheTTL(0)` para não encher `localStorage`
 
 ### 3.2 Métodos SDK → endpoints HTTP
 
 | Chamada no código | Endpoint típico | Função exportada / interna |
 |-------------------|-----------------|----------------------------|
-| `card.get(id)` | `GET /v2/{lang}/cards/{id}` | `getCard`, hydrate, variantes |
-| `card.list(Query...)` | `GET /v2/{lang}/cards?...` | `searchCards`, `searchCardsAdvanced`, `fetchDeckCardMeta`, `fetchSpeciesVariants` |
-| `set.list()` | `GET /v2/{lang}/sets` | `fetchSets`, resolução de sets no scan |
-| `set.get(setId)` | `GET /v2/{lang}/sets/{id}` | `getSetMeta` em `src/api/sets.ts` |
+| `card.get(id)` / REST | `GET /v2/{lang}/cards/{id}` | `getCard`, hydrate, variantes |
+| `card.list(Query...)` / REST | `GET /v2/{lang}/cards?...` | `searchCards`, `searchCardsAdvanced`, variantes |
+| `set.list()` / REST | `GET /v2/{lang}/sets` | `fetchSetsMeta`, Browse (1 request) |
+| `set.get(setId)` / REST | `GET /v2/{lang}/sets/{id}` | `listSetCards`, detalhe do set |
 
-Query builders usados: `.like()`, `.equal()`, `.contains()`, `.paginate()`.
+Filtros REST: `name=like:…`, `category=eq:…`, `pagination:page`, `pagination:itemsPerPage` ([doc](https://tcgdex.dev/rest/filtering-sorting-pagination)).
+
+**Fallback:** se o health probe falhar, `cardRepository` usa **Pokémon TCG API** (`api.pokemontcg.io/v2`) — ver `pokemonTcgProvider.ts`.
 
 ### 3.3 REST direto (`fetch`) — scanner
 
@@ -342,14 +345,15 @@ Também lista sets via REST / SDK para montar índice de abreviações. Scripts 
 | `inferMissingImageCandidates` | `CardImage` | Fallback PokémonTCG.io |
 | `baseCardId` / `parseOwnedKey` | inventário / binders | Chaves com idioma/variante |
 
-### 3.5 Preços
+### 3.5 Preços e variantes
 
 Não há API separada de marketplace. Os preços vêm **no JSON da carta TCGdex**:
 
-- Cardmarket → EUR (`pricing.cardmarket`)
-- TCGPlayer → USD (`pricing.tcgplayer`)
+- Cardmarket → EUR (`pricing.cardmarket`, incl. `avg-holo` para foil)
+- TCGPlayer → USD (`pricing.tcgplayer`: `normal`, `holofoil`, `reverse`, `reverse-holofoil`, …)
+- **`variants_detailed`**: variantes com `type`, `stamp`, `foil`; pricing por variante quando disponível (v2.45+), senão fallback em `card.pricing`
 
-`extractPrice` normaliza isso em `CardPrice`; `prices.ts` + `fx.ts` convertem para BRL.
+`extractPrice` / `pricingExtract.ts` normalizam isso; `priceRepository` + FX convertem para BRL.
 
 ### 3.6 Idiomas e fallback
 
@@ -382,7 +386,7 @@ https://assets.tcgdex.net/{lang}/{series}/{setId}/{localId}/{high|low}.webp
 
 ### 4.2 images.pokemontcg.io
 
-**Só CDN de imagens** — o projeto **não** usa a Pokémon TCG API oficial (`api.pokemontcg.io`).
+**CDN de imagens (fallback)** e **Pokémon TCG API** (`api.pokemontcg.io/v2`) quando o TCGdex está indisponível — ver `pokemonTcgProvider.ts` e banners na busca.
 
 **Padrões:**
 

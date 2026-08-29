@@ -2,9 +2,12 @@ import { API_CONFIG } from '../config'
 
 const CACHE_MS = 45_000
 const PROBE_TIMEOUT_MS = 3_000
+/** Consecutive probe failures before marking TCGdex down. */
+const FAIL_THRESHOLD = 2
 
 let cached: { ok: boolean; at: number } | null = null
 let inflight: Promise<boolean> | null = null
+let consecutiveFailures = 0
 
 export function isTcgdexApiUrl(url: string): boolean {
   return /api\.tcgdex\.net/i.test(url) || /\/api\/tcgdex(\/|\?|$)/i.test(url)
@@ -19,7 +22,16 @@ export function getCachedTcgdexAvailability(): boolean | null {
 
 /** Record a failed origin so callers skip further TCGdex traffic for CACHE_MS. */
 export function markTcgdexUnavailable() {
-  cached = { ok: false, at: Date.now() }
+  consecutiveFailures += 1
+  if (consecutiveFailures >= FAIL_THRESHOLD) {
+    cached = { ok: false, at: Date.now() }
+  }
+}
+
+/** Call after a successful TCGdex response to clear failure streak. */
+export function markTcgdexAvailable() {
+  consecutiveFailures = 0
+  cached = { ok: true, at: Date.now() }
 }
 
 /**
@@ -40,11 +52,15 @@ export async function isTcgdexAvailable(): Promise<boolean> {
         method: 'GET',
       })
       const ok = res.ok
-      cached = { ok, at: Date.now() }
+      if (ok) {
+        markTcgdexAvailable()
+      } else {
+        markTcgdexUnavailable()
+      }
       return ok
     } catch {
-      cached = { ok: false, at: Date.now() }
-      return false
+      markTcgdexUnavailable()
+      return consecutiveFailures < FAIL_THRESHOLD
     } finally {
       clearTimeout(timer)
       inflight = null
@@ -57,4 +73,5 @@ export async function isTcgdexAvailable(): Promise<boolean> {
 /** Force the next call to re-probe (e.g. after an explicit user retry). */
 export function resetTcgdexHealthCache() {
   cached = null
+  consecutiveFailures = 0
 }

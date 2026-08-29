@@ -1,4 +1,4 @@
-import TCGdex, { Query } from '@tcgdex/sdk'
+import TCGdex from '@tcgdex/sdk'
 import type { CardLang, CardPrice } from '../types'
 import { API_CONFIG } from './config'
 import { CatalogError, fetchJson } from './cards/http'
@@ -12,8 +12,12 @@ import {
   inferTcgdexImageBase,
   toPokemonTcgIoSetId,
 } from './images/imageProvider'
-import { quoteFromPricingSync } from './prices/tcgdexPriceProvider'
+import {
+  extractMarketsForVariant,
+  type PricingBlock,
+} from './prices/pricingExtract'
 import { resolvePokemonSearchTerms } from '../lib/pokemonNameAliases'
+import type { SetMeta } from './cards/types'
 
 export {
   baseCardId,
@@ -64,24 +68,117 @@ export function getClient(lang: CardLang): TCGdex {
   if (!client) {
     client = new TCGdex(lang)
     client.setEndpoint(API_CONFIG.tcgdex.baseUrl)
+    // Avoid localStorage quota exhaustion (@tcgdex-cache) in production.
+    try {
+      client.setCacheTTL(0)
+    } catch {
+      /* older SDK builds */
+    }
     clients.set(lang, client)
   }
   return client
 }
 
-type PricingBlock = {
-  cardmarket?: { avg?: number | null; trend?: number | null; low?: number | null }
-  tcgplayer?: Record<string, { marketPrice?: number | null } | null> | null
+type SetRestBrief = {
+  id: string
+  name: string
+  logo?: string
+  symbol?: string
+  cardCount?: { official?: number; total?: number }
+  releaseDate?: string
+  abbreviation?: { official?: string }
+  serie?: { id?: string; name?: string }
+}
+
+function setLogoUrl(base?: string): string | undefined {
+  if (!base) return undefined
+  if (/\.(webp|png|jpg|jpeg)$/i.test(base)) return base
+  return `${base}.webp`
+}
+
+function mapSetRest(s: SetRestBrief): SetMeta {
+  const count = s.cardCount
+  const total = count?.total ?? count?.official ?? 0
+  return {
+    id: s.id,
+    name: s.name,
+    logo: setLogoUrl(s.logo),
+    symbol: setLogoUrl(s.symbol),
+    cardCount: total,
+    cardCountOfficial: count?.official,
+    releaseDate: s.releaseDate,
+    abbreviation: s.abbreviation?.official,
+    serieName: s.serie?.name,
+    serieId: s.serie?.id,
+  }
+}
+
+let setsListCache: { lang: CardLang; at: number; rows: SetMeta[] } | null = null
+const SETS_CACHE_MS = 1000 * 60 * 30
+
+/** Full set list via REST — one request, no N+1. */
+export async function fetchSetsMeta(lang: CardLang): Promise<SetMeta[]> {
+  if (setsListCache && setsListCache.lang === lang && Date.now() - setsListCache.at < SETS_CACHE_MS) {
+    return setsListCache.rows
+  }
+  try {
+    const sets = await fetchJson<SetRestBrief[]>(
+      `${API_CONFIG.tcgdex.baseUrl}/${lang}/sets`,
+      { maxRetries: 2 },
+    )
+    const rows = (sets ?? []).map(mapSetRest).sort((a, b) =>
+      a.name.localeCompare(b.name, lang === 'ja' ? 'ja' : 'pt-BR'),
+    )
+    setsListCache = { lang, at: Date.now(), rows }
+    return rows
+  } catch {
+    if (lang !== 'en') return fetchSetsMeta('en')
+    return []
+  }
+}
+
+async function listCardsRest(
+  lang: CardLang,
+  filters: Record<string, string>,
+  page = 1,
+  pageSize = 100,
+): Promise<CardBrief[]> {
+  const qs = new URLSearchParams({
+    ...filters,
+    'pagination:page': String(page),
+    'pagination:itemsPerPage': String(pageSize),
+  })
+  try {
+    const list = await fetchJson<CardBrief[]>(
+      `${API_CONFIG.tcgdex.baseUrl}/${lang}/cards?${qs}`,
+      { maxRetries: 2 },
+    )
+    return (list ?? []).map(withSetId)
+  } catch {
+    return []
+  }
 }
 
 /** @deprecated Prefer priceRepository / PriceQuote. Kept for CachedCard compat. */
-export function extractPrice(card: { pricing?: PricingBlock }): CardPrice {
-  const q = quoteFromPricingSync('_', card.pricing)
+export function extractPrice(
+  card: { pricing?: PricingBlock },
+  variantType = 'normal',
+): CardPrice {
+  const { eur, usd } = extractMarketsForVariant(card.pricing, undefined, variantType)
   return {
-    eur: q.markets.cardmarket,
-    usd: q.markets.tcgplayer,
-    updated: q.updatedAt,
+    eur,
+    usd,
+    updated: Date.now(),
   }
+}
+
+function variantPrice(
+  card: FullCardLike,
+  variantType: string,
+  variantPricing?: PricingBlock,
+): CardPrice {
+  const { eur, usd } = extractMarketsForVariant(card.pricing, variantPricing, variantType)
+  return { eur, usd, updated: Date.now() }
 }
 
 /** REST fetch centralized here — scanner must not call api.tcgdex.net directly. */
@@ -156,28 +253,19 @@ function escapeRegExp(value: string): string {
 
 /** Paginate EN catalog by strict dexId (TCGdex requires eq for numeric dexId). */
 async function listAllByDexId(dexId: number): Promise<CardBrief[]> {
-  const sdk = getClient('en')
   const all: CardBrief[] = []
   for (let page = 1; page <= 40; page++) {
-    try {
-      const batch = (await sdk.card.list(
-        Query.create().equal('dexId', String(dexId)).paginate(page, 100),
-      )) as CardBrief[]
-      if (!batch.length) break
-      all.push(...batch)
-      if (batch.length < 100) break
-    } catch {
-      break
-    }
+    const batch = await listCardsRest('en', { dexId: `eq:${dexId}` }, page, 100)
+    if (!batch.length) break
+    all.push(...batch)
+    if (batch.length < 100) break
   }
   return all
 }
 
 export async function fetchSets(lang: CardLang) {
-  const sets = await getClient(lang).set.list()
-  return [...sets].sort((a, b) =>
-    a.name.localeCompare(b.name, lang === 'ja' ? 'ja' : 'pt-BR'),
-  )
+  const rows = await fetchSetsMeta(lang)
+  return rows.map((s) => ({ id: s.id, name: s.name }))
 }
 
 function localIdVariants(localId: string): string[] {
@@ -226,12 +314,9 @@ async function resolveSetsByOfficial(official: number): Promise<string[]> {
   }
 
   try {
-    const sets = await getClient('en').set.list()
+    const sets = await fetchSetsMeta('en')
     return sets
-      .filter((s) => {
-        const count = (s as { cardCount?: { official?: number; total?: number } }).cardCount
-        return count?.official === official || count?.total === official
-      })
+      .filter((s) => s.cardCountOfficial === official || s.cardCount === official)
       .map((s) => s.id)
   } catch {
     return []
@@ -243,53 +328,19 @@ async function fetchCardBrief(
   setId: string,
   localId: string,
 ): Promise<CardBrief | null> {
-  const langs: CardLang[] = lang === 'en' ? ['en'] : [lang, 'en']
-  for (const lid of localIdVariants(localId)) {
-    for (const L of langs) {
-      try {
-        const card = await getClient(L).card.get(`${setId}-${lid}`)
-        if (!card?.id) continue
-        return {
-          id: card.id,
-          name: card.name,
-          localId: card.localId,
-          image: cardImageUrl(card.image, 'low') ?? card.image,
-        }
-      } catch {
-        /* try next */
-      }
-      try {
-        const card = await fetchJson<{
-          id: string
-          name: string
-          localId: string | number
-          image?: string
-        }>(`${API_CONFIG.tcgdex.baseUrl}/${L}/sets/${setId}/${lid}`, { maxRetries: 1 })
-        if (card?.id) {
-          return {
-            id: card.id,
-            name: card.name,
-            localId: card.localId,
-            image: cardImageUrl(card.image, 'low') ?? card.image,
-          }
-        }
-      } catch {
-        /* try next */
-      }
-    }
+  const card = await fetchCardRest(lang, setId, localId)
+  if (!card?.id) return null
+  return {
+    id: card.id,
+    name: card.name,
+    localId: card.localId,
+    image: cardImageUrl(card.image, 'low') ?? card.image,
+    setId,
   }
-  return null
 }
 
 async function listByName(lang: CardLang, name: string, page = 1, pageSize = 30): Promise<CardBrief[]> {
-  try {
-    const list = await getClient(lang).card.list(
-      Query.create().like('name', name).paginate(page, pageSize),
-    )
-    return list as CardBrief[]
-  } catch {
-    return []
-  }
+  return listCardsRest(lang, { name: `like:${name}` }, page, pageSize)
 }
 
 async function listByLocalId(lang: CardLang, localId: string): Promise<CardBrief[]> {
@@ -297,15 +348,9 @@ async function listByLocalId(lang: CardLang, localId: string): Promise<CardBrief
   const byId = new Map<string, CardBrief>()
   await Promise.all(
     variants.map(async (lid) => {
-      try {
-        const list = (await getClient(lang).card.list(
-          Query.create().like('localId', lid).paginate(1, 100),
-        )) as CardBrief[]
-        for (const c of list) {
-          if (localIdMatches(c.localId, localId) && !byId.has(c.id)) byId.set(c.id, c)
-        }
-      } catch {
-        /* ignore */
+      const list = await listCardsRest(lang, { localId: `like:${lid}` }, 1, 100)
+      for (const c of list) {
+        if (localIdMatches(c.localId, localId) && !byId.has(c.id)) byId.set(c.id, c)
       }
     }),
   )
@@ -536,30 +581,22 @@ export async function searchCardsAdvanced(
       setId: c.setId ?? setIdFromCardId(c.id),
     }))
 
-    // Category / type filters — apply via API on EN (stable), then keep matching ids
+    // Category / type filters — apply via REST on EN (stable), then keep matching ids
     if (filters.category || filters.type) {
       const filterLang: CardLang = lang === 'pt' ? 'pt' : 'en'
-      let q = Query.create().paginate(1, 100)
+      const restFilters: Record<string, string> = { name: `like:${name}` }
       if (filters.category) {
-        const cat =
-          CATEGORY_BY_LANG[filterLang][filters.category] ?? filters.category
-        q = q.equal('category', cat)
+        const cat = CATEGORY_BY_LANG[filterLang][filters.category] ?? filters.category
+        restFilters.category = `eq:${cat}`
       }
       if (filters.type) {
         const typeName = TYPE_BY_LANG[filterLang][filters.type] ?? filters.type
-        q = q.contains('types', typeName)
+        restFilters.types = `like:${typeName}`
       }
-      // Narrow by name on the filter language too
-      q = q.like('name', name)
-      try {
-        const filtered = (await getClient(filterLang).card.list(q)) as CardBrief[]
-        const allowed = new Set(filtered.map((c) => c.id))
-        // Also allow EN-discovered ids that appear in filtered list when langs differ
-        if (allowed.size > 0) {
-          hits = hits.filter((h) => allowed.has(h.id))
-        }
-      } catch {
-        /* keep unfiltered name hits */
+      const filtered = await listCardsRest(filterLang, restFilters, 1, 100)
+      const allowed = new Set(filtered.map((c) => c.id))
+      if (allowed.size > 0) {
+        hits = hits.filter((h) => allowed.has(h.id))
       }
     }
 
@@ -567,44 +604,28 @@ export async function searchCardsAdvanced(
   }
 
   // Category / type only (no name)
-  let q = Query.create().paginate(page, pageSize)
+  const restFilters: Record<string, string> = {}
   if (filters.category) {
     const cat = CATEGORY_BY_LANG[lang][filters.category] ?? filters.category
-    q = q.equal('category', cat)
+    restFilters.category = `eq:${cat}`
   }
   if (filters.type) {
     const typeName = TYPE_BY_LANG[lang][filters.type] ?? filters.type
-    q = q.contains('types', typeName)
+    restFilters.types = `like:${typeName}`
   }
 
-  try {
-    const list = (await getClient(lang).card.list(q)) as CardBrief[]
-    const briefs = list.map(withSetId)
-    const localized = await localizeBriefs(lang, briefs, pageSize)
-    return localized.map((c) => ({
-      id: c.id,
-      name: c.name,
-      localId: c.localId,
-      image: c.image,
-      setId: c.setId,
-    }))
-  } catch {
-    try {
-      const list = (await getClient('en').card.list(
-        Query.create().paginate(page, pageSize),
-      )) as CardBrief[]
-      const localized = await localizeBriefs(lang, list.map(withSetId), pageSize)
-      return localized.map((c) => ({
-        id: c.id,
-        name: c.name,
-        localId: c.localId,
-        image: c.image,
-        setId: c.setId,
-      }))
-    } catch {
-      return []
-    }
+  let list = await listCardsRest(lang, restFilters, page, pageSize)
+  if (!list.length && lang !== 'en') {
+    list = await listCardsRest('en', restFilters, page, pageSize)
   }
+  const localized = await localizeBriefs(lang, list, pageSize)
+  return localized.map((c) => ({
+    id: c.id,
+    name: c.name,
+    localId: c.localId,
+    image: c.image,
+    setId: c.setId,
+  }))
 }
 
 export type DeckCardMeta = {
@@ -619,6 +640,8 @@ export type DeckCardMeta = {
   localId: string
   image?: string
   regulationMark?: string
+  legalStandard?: boolean
+  legalExpanded?: boolean
   trainerType?: string
   energyType?: string
   effect?: string
@@ -642,6 +665,7 @@ export async function fetchDeckCardMeta(
       regulationMark?: string
       effect?: string
       hp?: number
+      legal?: { standard?: boolean; expanded?: boolean }
     } | null
     if (!card) return null
     const rawCat = String(card.category ?? '')
@@ -655,9 +679,11 @@ export async function fetchDeckCardMeta(
     const rarity = card.rarity
     const effect = card.effect
     const energyType = card.energyType
+    const energyLower = energyType?.toLowerCase() ?? ''
     const isBasicEnergy =
       category === 'Energy' &&
-      (energyType?.toLowerCase() === 'normal' ||
+      (energyLower === 'normal' ||
+        energyLower === 'basic' ||
         ((!energyType || !/special/i.test(energyType)) &&
           (!effect || effect.trim().length <= 40) &&
           /energy|energia/i.test(name)))
@@ -686,6 +712,8 @@ export async function fetchDeckCardMeta(
       localId: String(card.localId),
       image,
       regulationMark: card.regulationMark,
+      legalStandard: card.legal?.standard,
+      legalExpanded: card.legal?.expanded,
       trainerType: card.trainerType,
       energyType,
       effect,
@@ -724,31 +752,13 @@ export async function getCard(lang: CardLang, id: string) {
 
   if (getCachedTcgdexAvailability() === false) return undefined
 
-  // Last resort: SDK (may still fail if localStorage is full)
-  try {
-    const card = await getClient(lang).card.get(cardId)
-    if (card) return card
-  } catch {
-    /* ignore */
-  }
-  if (lang !== 'en') {
-    try {
-      const fallback = await getClient('en').card.get(cardId)
-      if (fallback) return fallback
-    } catch {
-      /* ignore */
-    }
-  }
   return undefined
 }
 
 async function listAllByName(lang: CardLang, name: string): Promise<CardBrief[]> {
-  const sdk = getClient(lang)
   const all: CardBrief[] = []
   for (let page = 1; page <= 25; page++) {
-    const batch = (await sdk.card.list(
-      Query.create().like('name', name).paginate(page, 100),
-    )) as CardBrief[]
+    const batch = await listCardsRest(lang, { name: `like:${name}` }, page, 100)
     if (!batch.length) break
     all.push(...batch)
     if (batch.length < 100) break
@@ -801,7 +811,7 @@ function expandCardVariants(card: FullCardLike): CardVariantEntry[] {
         setId,
         variant: v.type,
         variantLabel: variantLabel(v.type, extras),
-        price: extractPrice({ pricing: v.pricing }),
+        price: variantPrice(card, v.type, v.pricing),
       }
     })
   }
@@ -821,7 +831,7 @@ function expandCardVariants(card: FullCardLike): CardVariantEntry[] {
         setId,
         variant: type,
         variantLabel: variantLabel(type),
-        price: extractPrice(card),
+        price: variantPrice(card, type),
       })
     }
     if (entries.length) return entries
@@ -838,7 +848,7 @@ function expandCardVariants(card: FullCardLike): CardVariantEntry[] {
       setId,
       variant: 'normal',
       variantLabel: 'Normal',
-      price: extractPrice(card),
+      price: variantPrice(card, 'normal'),
     },
   ]
 }
@@ -895,9 +905,7 @@ async function fetchSpeciesVariantsFromTcgdex(
   merge(briefs.filter((c) => isSpeciesCardName(c.name, speciesName)))
 
   try {
-    const exact = (await getClient('en').card.list(
-      Query.create().equal('name', speciesName).paginate(1, 100),
-    )) as CardBrief[]
+    const exact = await listCardsRest('en', { name: `eq:${speciesName}` }, 1, 100)
     merge(exact)
   } catch {
     // ignore
@@ -910,23 +918,12 @@ async function fetchSpeciesVariantsFromTcgdex(
     const chunk = candidates.slice(i, i + concurrency)
     const details = await Promise.all(
       chunk.map(async (b) => {
-        try {
-          const localized = (await getClient(lang).card.get(b.id)) as FullCardLike | null
-          if (localized && (localized.image || localized.name)) return localized
-          if (lang !== 'en') {
-            return (await getClient('en').card.get(b.id)) as FullCardLike | null
-          }
-          return localized
-        } catch {
-          if (lang !== 'en') {
-            try {
-              return (await getClient('en').card.get(b.id)) as FullCardLike | null
-            } catch {
-              return null
-            }
-          }
-          return null
+        const localized = (await getCard(lang, b.id)) as FullCardLike | null
+        if (localized && (localized.image || localized.name)) return localized
+        if (lang !== 'en') {
+          return (await getCard('en', b.id)) as FullCardLike | null
         }
+        return localized
       }),
     )
     for (const card of details) {

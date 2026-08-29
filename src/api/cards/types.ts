@@ -19,6 +19,8 @@ export type NormalizedCard = {
   trainerType?: string
   energyType?: string
   regulationMark?: string
+  legalStandard?: boolean
+  legalExpanded?: boolean
   effect?: string
   hp?: number
 }
@@ -43,6 +45,8 @@ export type SetMeta = {
   releaseDate?: string
   abbreviation?: string
   serieName?: string
+  /** TCGdex series id (e.g. sv, me, tcgp) — used to filter Pocket from physical browse. */
+  serieId?: string
 }
 
 /** Brief card row from a set listing (`GET /sets/{id}` → cards[]). */
@@ -101,6 +105,8 @@ export type DeckCardMeta = {
   localId: string
   image?: string
   regulationMark?: string
+  legalStandard?: boolean
+  legalExpanded?: boolean
   trainerType?: string
   energyType?: string
   effect?: string

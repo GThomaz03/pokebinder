@@ -9,6 +9,13 @@ export default defineConfig({
     host: true,
     port: 5173,
     // HTTPS via basicSsl — required for getUserMedia on phones over LAN
+    proxy: {
+      '/api/tcgdex': {
+        target: 'https://api.tcgdex.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/tcgdex/, '/v2'),
+      },
+    },
   },
   optimizeDeps: {
     exclude: ['onnxruntime-web', '@xenova/transformers'],
