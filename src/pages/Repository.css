@@ -45,9 +45,8 @@
   margin-left: auto;
 }
 
-.repo-list-actions input {
-  min-width: min(240px, 100%);
-  width: min(280px, 55vw);
+.repo-list-actions input,
+.repo-sort select {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--btn-radius);
@@ -55,6 +54,21 @@
   padding: 0.55rem 0.85rem;
   height: 2.55rem;
   box-sizing: border-box;
+}
+
+.repo-list-actions input {
+  min-width: min(240px, 100%);
+  width: min(280px, 55vw);
+}
+
+.repo-sort {
+  display: flex;
+  margin: 0;
+}
+
+.repo-sort select {
+  max-width: min(220px, 46vw);
+  cursor: pointer;
 }
 
 .repo-scan-btn,

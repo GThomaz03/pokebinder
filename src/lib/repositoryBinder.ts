@@ -118,8 +118,17 @@ export function inventoryTotalBrl(
   let total = 0
   for (const e of entries) {
     if (e.qty <= 0) continue
-    const brl = priceToBrl(getCachedPrice(e.key), market)
+    const brl = cardSaleBrl(e.key, market)
     if (brl != null) total += brl * e.qty
   }
   return total
+}
+
+/** Unit sale estimate in BRL for one inventory card key. */
+export function cardSaleBrl(
+  cardKey: string,
+  market: PriceMarket = 'cardmarket',
+): number | null {
+  const price = getCachedPrice(cardKey) ?? getCachedCard(baseCardId(cardKey))?.price
+  return priceToBrl(price, market)
 }

@@ -6,13 +6,27 @@ import { baseCardId } from '../api/tcgdex'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
 import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { CardImage } from '../components/CardImage'
+import { useFxRates } from '../hooks/useCardQueries'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
+import { cardSaleBrl } from '../lib/repositoryBinder'
 import { defaultSettings } from '../types'
 import './Repository.css'
 
 const PINNED_SETS_KEY = 'pokebinder-pinned-sets-v1'
+const SORT_KEY = 'pokebinder-repo-sort-v1'
 const COLLAPSED_COUNT = 4
+const HYDRATE_BATCH = 24
+
+type RepoSort = 'default' | 'sale-desc'
+
+function loadSort(): RepoSort {
+  try {
+    return localStorage.getItem(SORT_KEY) === 'sale-desc' ? 'sale-desc' : 'default'
+  } catch {
+    return 'default'
+  }
+}
 
 type SetRow = {
   setId: string
@@ -48,15 +62,20 @@ export function RepositoryPage() {
   const [setMeta, setSetMeta] = useState<Record<string, SetMeta>>({})
   const [pinnedIds, setPinnedIds] = useState<string[]>(loadPinned)
   const [expanded, setExpanded] = useState(false)
+  const [sort, setSort] = useState<RepoSort>(loadSort)
   const detailsSettings = useMemo(() => defaultSettings(), [])
+  useFxRates(true)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all(
-      entries.slice(0, 60).map((e) => hydrateCard(lang, e.key)),
-    ).then(() => {
-      if (!cancelled) setTick((t) => t + 1)
-    })
+    const keys = entries.map((e) => e.key)
+    void (async () => {
+      for (let i = 0; i < keys.length; i += HYDRATE_BATCH) {
+        if (cancelled) return
+        await Promise.all(keys.slice(i, i + HYDRATE_BATCH).map((key) => hydrateCard(lang, key)))
+        if (!cancelled) setTick((t) => t + 1)
+      }
+    })()
     return () => {
       cancelled = true
     }
@@ -78,8 +97,6 @@ export function RepositoryPage() {
     }
   }, [setIds, lang])
 
-  void tick
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return entries
@@ -93,6 +110,16 @@ export function RepositoryPage() {
       )
     })
   }, [entries, query])
+
+  const displayed = useMemo(() => {
+    if (sort !== 'sale-desc') return filtered
+    return [...filtered].sort((a, b) => {
+      const vb = cardSaleBrl(b.key) ?? -1
+      const va = cardSaleBrl(a.key) ?? -1
+      if (vb !== va) return vb - va
+      return a.key.localeCompare(b.key)
+    })
+  }, [filtered, sort, tick])
 
   const setRows = useMemo((): SetRow[] => {
     const pinned = new Set(pinnedIds)
@@ -219,6 +246,25 @@ export function RepositoryPage() {
         <div className="repo-list-head">
           <h2>Cartas ({filtered.length})</h2>
           <div className="repo-list-actions">
+            <label className="repo-sort">
+              <span className="sr-only">Ordenar cartas</span>
+              <select
+                value={sort}
+                aria-label="Ordenar cartas"
+                onChange={(e) => {
+                  const next = e.target.value === 'sale-desc' ? 'sale-desc' : 'default'
+                  setSort(next)
+                  try {
+                    localStorage.setItem(SORT_KEY, next)
+                  } catch {
+                    /* ignore quota */
+                  }
+                }}
+              >
+                <option value="default">Padrão</option>
+                <option value="sale-desc">Maior valor de venda</option>
+              </select>
+            </label>
             <input
               type="search"
               placeholder="Buscar no repositório…"
@@ -237,7 +283,7 @@ export function RepositoryPage() {
           </div>
         </div>
         <div className="cards">
-          {filtered.map((e) => {
+          {displayed.map((e) => {
             const c = getCachedCard(baseCardId(e.key))
             return (
               <article
