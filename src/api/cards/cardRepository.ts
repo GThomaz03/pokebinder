@@ -166,35 +166,29 @@ export async function getSetMeta(
   return req
 }
 
-async function mapPool<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length)
-  let next = 0
-  async function worker() {
-    while (next < items.length) {
-      const i = next++
-      results[i] = await fn(items[i]!)
-    }
-  }
-  const n = Math.max(1, Math.min(concurrency, items.length || 1))
-  await Promise.all(Array.from({ length: n }, () => worker()))
-  return results
-}
-
 export async function getSetsMeta(
   lang: CardLang,
   setIds: string[],
-  concurrency = 8,
 ): Promise<Record<string, SetMeta>> {
   const unique = [...new Set(setIds.filter(Boolean))]
-  const results = await mapPool(unique, concurrency, (id) => getSetMeta(lang, id))
+  if (!unique.length) return {}
+
+  const [localeRows, enRows] = await Promise.all([
+    fetchSetsMeta(lang),
+    lang !== 'en' ? fetchSetsMeta('en') : Promise.resolve([] as SetMeta[]),
+  ])
+
+  const byId = new Map<string, SetMeta>()
+  for (const s of enRows) byId.set(s.id, s)
+  for (const s of localeRows) byId.set(s.id, s)
+
   const map: Record<string, SetMeta> = {}
-  for (let i = 0; i < unique.length; i++) {
-    const meta = results[i]
-    if (meta) map[unique[i]!] = meta
+  for (const id of unique) {
+    const meta = byId.get(id)
+    if (meta) {
+      map[id] = meta
+      setMetaCache.set(`${lang}:${id}`, meta)
+    }
   }
   return map
 }

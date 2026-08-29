@@ -15,6 +15,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/tcgdex/, '/v2'),
       },
+      '/api/pokemontcg': {
+        target: 'https://api.pokemontcg.io',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/pokemontcg/, '/v2'),
+      },
     },
   },
   optimizeDeps: {

@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config'
+import { API_CONFIG, TCGDEX_ORIGIN } from '../config'
 import {
   getCachedTcgdexAvailability,
   isTcgdexApiUrl,
@@ -57,10 +57,45 @@ export type FetchJsonOptions = {
   signal?: AbortSignal
 }
 
+function tcgdxDirectUrl(proxyUrl: string): string | null {
+  if (typeof window === 'undefined') return null
+  if (!/\/api\/tcgdex(\/|\?|$)/i.test(proxyUrl)) return null
+  return proxyUrl.replace(/\/api\/tcgdex/, TCGDEX_ORIGIN)
+}
+
+function tcgdxFetchUrls(url: string): string[] {
+  const direct = tcgdxDirectUrl(url)
+  return direct ? [url, direct] : [url]
+}
+
+function shouldTryTcgdexDirect(err: unknown): boolean {
+  if (!(err instanceof CatalogError)) return true
+  if (err.code === 'network' || err.code === 'timeout') return true
+  return err.status === 502 || err.status === 503 || err.status === 504
+}
+
 /**
  * fetch JSON with timeout, exponential backoff, and 429 Retry-After support.
  */
 export async function fetchJson<T>(url: string, opts: FetchJsonOptions = {}): Promise<T> {
+  const urls = tcgdxFetchUrls(url)
+  let lastError: unknown
+
+  for (let u = 0; u < urls.length; u++) {
+    const tryUrl = urls[u]!
+    try {
+      return await fetchJsonOnce<T>(tryUrl, opts)
+    } catch (err) {
+      lastError = err
+      if (u < urls.length - 1 && shouldTryTcgdexDirect(err)) continue
+      throw err
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new CatalogError(`Network error: ${url}`, { code: 'network' })
+}
+
+async function fetchJsonOnce<T>(url: string, opts: FetchJsonOptions = {}): Promise<T> {
   const timeoutMs = opts.timeoutMs ?? API_CONFIG.http.timeoutMs
   const maxRetries = opts.maxRetries ?? API_CONFIG.http.maxRetries
   let lastError: unknown

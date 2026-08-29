@@ -1,9 +1,3 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/tcgdex/:path*",
-      "destination": "https://api.tcgdex.net/v2/:path*"
-    },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
 }

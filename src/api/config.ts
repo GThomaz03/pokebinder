@@ -2,16 +2,21 @@
 
 export const TCGDEX_ORIGIN = 'https://api.tcgdex.net/v2'
 
-/** Same-origin proxy in browser (Vite dev + Vercel prod); direct origin in Node scripts. */
+/** Same-origin proxy in browser (Vite dev + Vercel serverless); direct origin in Node scripts. */
 function tcgdexBaseUrl(): string {
   if (typeof window === 'undefined') return TCGDEX_ORIGIN
   return '/api/tcgdex'
 }
 
+function pokemonTcgApiBaseUrl(): string {
+  if (typeof window === 'undefined') return 'https://api.pokemontcg.io/v2'
+  return '/api/pokemontcg'
+}
+
 export const API_CONFIG = {
   tcgdex: {
     /**
-     * Production uses a same-origin Vercel rewrite (`/api/tcgdex`) because
+     * Browser uses same-origin Vercel serverless proxy (`/api/tcgdex`) because
      * `api.tcgdex.net` is unreachable from some networks (ERR_CONNECTION_REFUSED).
      * Images stay on assets.tcgdex.net — that CDN is typically still reachable.
      */
@@ -21,7 +26,9 @@ export const API_CONFIG = {
     assetsBaseUrl: 'https://assets.tcgdex.net',
   },
   pokemonTcgIo: {
-    apiBaseUrl: 'https://api.pokemontcg.io/v2',
+    get apiBaseUrl() {
+      return pokemonTcgApiBaseUrl()
+    },
     imagesBaseUrl: 'https://images.pokemontcg.io',
   },
   fx: {

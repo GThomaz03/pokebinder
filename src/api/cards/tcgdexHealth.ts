@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config'
+import { API_CONFIG, TCGDEX_ORIGIN } from '../config'
 
 const CACHE_MS = 45_000
 const PROBE_TIMEOUT_MS = 3_000
@@ -46,19 +46,26 @@ export async function isTcgdexAvailable(): Promise<boolean> {
   inflight = (async () => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS)
+    const probeUrls =
+      typeof window !== 'undefined'
+        ? [`${API_CONFIG.tcgdex.baseUrl}/en/series`, `${TCGDEX_ORIGIN}/en/series`]
+        : [`${API_CONFIG.tcgdex.baseUrl}/en/series`]
+
     try {
-      const res = await fetch(`${API_CONFIG.tcgdex.baseUrl}/en/series`, {
-        signal: controller.signal,
-        method: 'GET',
-      })
-      const ok = res.ok
-      if (ok) {
-        markTcgdexAvailable()
-      } else {
-        markTcgdexUnavailable()
+      for (const probeUrl of probeUrls) {
+        try {
+          const res = await fetch(probeUrl, {
+            signal: controller.signal,
+            method: 'GET',
+          })
+          if (res.ok) {
+            markTcgdexAvailable()
+            return true
+          }
+        } catch {
+          /* try next URL */
+        }
       }
-      return ok
-    } catch {
       markTcgdexUnavailable()
       return consecutiveFailures < FAIL_THRESHOLD
     } finally {

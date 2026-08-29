@@ -75,8 +75,28 @@ const SERIES_PREFIXES = [
   'mc',
 ].sort((a, b) => b.length - a.length)
 
+/** Sets without art on images.pokemontcg.io — TCGdex CDN only. */
+const POKEMON_TCG_IO_SKIP_SETS = new Set([
+  'mep',
+  'mee',
+  'svp',
+  'swshp',
+  'smp',
+  'xyp',
+  'bwp',
+  'dpp',
+  'hsp',
+])
+
 /** Sets whose TCGdex records omit `image` and whose assets CDN has no art. */
 const ENERGY_SET_IDS = new Set(['sve', 'mee'])
+
+function pokemonTcgIoSupported(setId: string): boolean {
+  const lower = setId.toLowerCase()
+  if (POKEMON_TCG_IO_SKIP_SETS.has(lower)) return false
+  if (/^(sv|swsh|sm|xy|bw|dp|pl|ex|me)[a-z]*p$/i.test(lower) && lower.length <= 6) return false
+  return true
+}
 
 function seriesFromSetId(setId: string): string | undefined {
   const lower = setId.toLowerCase()
@@ -226,7 +246,7 @@ export function inferMissingImageCandidates(opts: {
       pushUnique(urls, `${ioBase}/sve/${n}_hires.png`)
     }
   }
-  if (isEnergySet && setId) {
+  if (isEnergySet && setId && pokemonTcgIoSupported(setId)) {
     pushPokemonTcgIo(urls, ioBase, setId, localIds)
   }
 
@@ -243,7 +263,7 @@ export function inferMissingImageCandidates(opts: {
     }
   }
 
-  if (dash > 0 && !isEnergySet) {
+  if (dash > 0 && !isEnergySet && pokemonTcgIoSupported(setId)) {
     pushPokemonTcgIo(urls, ioBase, setId, localIds)
   }
 

@@ -115,26 +115,40 @@ function mapSetRest(s: SetRestBrief): SetMeta {
 
 let setsListCache: { lang: CardLang; at: number; rows: SetMeta[] } | null = null
 const SETS_CACHE_MS = 1000 * 60 * 30
+let setsListInflight: Promise<SetMeta[]> | null = null
+let setsListInflightLang: CardLang | null = null
 
 /** Full set list via REST — one request, no N+1. */
 export async function fetchSetsMeta(lang: CardLang): Promise<SetMeta[]> {
   if (setsListCache && setsListCache.lang === lang && Date.now() - setsListCache.at < SETS_CACHE_MS) {
     return setsListCache.rows
   }
-  try {
-    const sets = await fetchJson<SetRestBrief[]>(
-      `${API_CONFIG.tcgdex.baseUrl}/${lang}/sets`,
-      { maxRetries: 2 },
-    )
-    const rows = (sets ?? []).map(mapSetRest).sort((a, b) =>
-      a.name.localeCompare(b.name, lang === 'ja' ? 'ja' : 'pt-BR'),
-    )
-    setsListCache = { lang, at: Date.now(), rows }
-    return rows
-  } catch {
-    if (lang !== 'en') return fetchSetsMeta('en')
-    return []
+  if (setsListInflight && setsListInflightLang === lang) {
+    return setsListInflight
   }
+
+  setsListInflightLang = lang
+  setsListInflight = (async () => {
+    try {
+      const sets = await fetchJson<SetRestBrief[]>(
+        `${API_CONFIG.tcgdex.baseUrl}/${lang}/sets`,
+        { maxRetries: 2 },
+      )
+      const rows = (sets ?? []).map(mapSetRest).sort((a, b) =>
+        a.name.localeCompare(b.name, lang === 'ja' ? 'ja' : 'pt-BR'),
+      )
+      setsListCache = { lang, at: Date.now(), rows }
+      return rows
+    } catch {
+      if (lang !== 'en') return fetchSetsMeta('en')
+      return []
+    } finally {
+      setsListInflight = null
+      setsListInflightLang = null
+    }
+  })()
+
+  return setsListInflight
 }
 
 async function listCardsRest(
