@@ -174,8 +174,8 @@ async function listPokemonTcgCards(q: string, pageSize = 250): Promise<PokemonTc
     const url = `${API_CONFIG.pokemonTcgIo.apiBaseUrl}/cards?${params}`
     try {
       const res = await fetchJson<PokemonTcgListResponse>(url, {
-        timeoutMs: 8_000,
-        maxRetries: 1,
+        timeoutMs: 12_000,
+        maxRetries: API_CONFIG.http.maxRetries,
       })
       const batch = (res.data ?? []).filter((c) => c?.id)
       all.push(...batch)
@@ -210,8 +210,8 @@ export async function searchPokemonTcgCards(
 
   try {
     const res = await fetchJson<PokemonTcgListResponse>(url, {
-      timeoutMs: 8_000,
-      maxRetries: 1,
+      timeoutMs: 12_000,
+      maxRetries: API_CONFIG.http.maxRetries,
     })
     const hits = (res.data ?? []).filter((c) => c?.id).map(mapBrief)
     if (hits.length) return hits
@@ -236,8 +236,8 @@ export async function getPokemonTcgCardById(
   const url = `${API_CONFIG.pokemonTcgIo.apiBaseUrl}/cards/${encodeURIComponent(id)}`
   try {
     const res = await fetchJson<PokemonTcgCardResponse>(url, {
-      timeoutMs: 8_000,
-      maxRetries: 1,
+      timeoutMs: 12_000,
+      maxRetries: API_CONFIG.http.maxRetries,
     })
     if (!res.data?.id) return null
     return mapNormalized(lang, res.data)

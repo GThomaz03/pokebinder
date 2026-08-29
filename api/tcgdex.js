@@ -7,5 +7,6 @@ export default async function handler(req, res) {
     mountPrefix: '/api/tcgdex',
     cacheControl: 'public, s-maxage=1800, stale-while-revalidate=86400',
     errorLabel: 'TCGdex upstream unavailable',
+    maxAttempts: 4,
   })
 }
