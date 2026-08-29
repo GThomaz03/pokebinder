@@ -68,9 +68,16 @@ function tcgdxFetchUrls(url: string): string[] {
   return direct ? [url, direct] : [url]
 }
 
-function shouldTryTcgdexDirect(err: unknown): boolean {
+function shouldTryTcgdexDirect(err: unknown, proxyUrl?: string): boolean {
   if (!(err instanceof CatalogError)) return true
   if (err.code === 'network' || err.code === 'timeout') return true
+  if (
+    err.status === 404 &&
+    proxyUrl &&
+    /\/api\/tcgdex(\/|\?|$)/i.test(proxyUrl)
+  ) {
+    return true
+  }
   return err.status === 502 || err.status === 503 || err.status === 504
 }
 
@@ -87,7 +94,7 @@ export async function fetchJson<T>(url: string, opts: FetchJsonOptions = {}): Pr
       return await fetchJsonOnce<T>(tryUrl, opts)
     } catch (err) {
       lastError = err
-      if (u < urls.length - 1 && shouldTryTcgdexDirect(err)) continue
+      if (u < urls.length - 1 && shouldTryTcgdexDirect(err, urls[0])) continue
       throw err
     }
   }

@@ -1,3 +1,16 @@
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/tcgdex/:path*",
+      "destination": "/api/tcgdex?path=:path*"
+    },
+    {
+      "source": "/api/pokemontcg/:path*",
+      "destination": "/api/pokemontcg?path=:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
