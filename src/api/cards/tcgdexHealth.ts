@@ -1,5 +1,7 @@
 import { API_CONFIG, TCGDEX_ORIGIN } from '../config'
 
+import { isCatalogPopulated } from './supabaseCardProvider'
+
 const CACHE_MS = 45_000
 const PROBE_TIMEOUT_MS = 3_000
 /** Consecutive probe failures before marking TCGdex down. */
@@ -8,6 +10,14 @@ const FAIL_THRESHOLD = 2
 let cached: { ok: boolean; at: number } | null = null
 let inflight: Promise<boolean> | null = null
 let consecutiveFailures = 0
+let catalogSkipProbe: boolean | null = null
+
+async function shouldSkipTcgdexProbe(): Promise<boolean> {
+  if (catalogSkipProbe === null) {
+    catalogSkipProbe = await isCatalogPopulated()
+  }
+  return catalogSkipProbe
+}
 
 export function isTcgdexApiUrl(url: string): boolean {
   return /api\.tcgdex\.net/i.test(url) || /\/api\/tcgdex(\/|\?|$)/i.test(url)
@@ -39,6 +49,10 @@ export function markTcgdexAvailable() {
  * do not hammer a downed origin.
  */
 export async function isTcgdexAvailable(): Promise<boolean> {
+  if (await shouldSkipTcgdexProbe()) {
+    cached = { ok: false, at: Date.now() }
+    return false
+  }
   const hit = getCachedTcgdexAvailability()
   if (hit !== null) return hit
   if (inflight) return inflight

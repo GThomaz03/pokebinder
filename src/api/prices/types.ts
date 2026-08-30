@@ -1,8 +1,9 @@
 import type { CardLang, PriceMarket } from '../../types'
 
-/** Known / future price sources. Only `tcgdex` is implemented today. */
+/** Known / future price sources. `tcgdex` and `pokemontcg` are implemented. */
 export type PriceSource =
   | 'tcgdex'
+  | 'pokemontcg'
   | 'justtcg'
   | 'pokewallet'
   | 'brazilian_market'

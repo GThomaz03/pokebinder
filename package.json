@@ -8,10 +8,16 @@
     "tunnel": "npx --yes localtunnel --port 5173",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
     "preview": "vite preview",
     "scan:embeddings": "node scripts/build-card-embeddings.mjs",
     "scan:set-index": "node scripts/build-set-index.mjs",
-    "scan:models": "node scripts/fetch-scan-models.mjs"
+    "scan:models": "node scripts/fetch-scan-models.mjs",
+    "cards:import": "npx tsx scripts/cards-import.ts",
+    "cards:sync": "npx tsx scripts/cards-sync.ts",
+    "cards:sync-prices": "npx tsx scripts/prices-sync.ts",
+    "cards:health": "npx tsx scripts/cards-health.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -37,7 +43,9 @@
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "sharp": "^0.35.3",
+    "tsx": "^4.20.5",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^3.2.4"
   }
 }

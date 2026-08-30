@@ -1,0 +1,95 @@
+.admin-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.admin-nav a {
+  color: var(--accent, #6366f1);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.admin-stat {
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.admin-stat-value {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.admin-stat-label {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.admin-section h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+.admin-hint {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-top: 1rem;
+}
+
+.admin-login-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--accent, #6366f1);
+  color: #fff;
+  font: inherit;
+}
+
+.admin-muted {
+  opacity: 0.7;
+}
+
+.admin-status.ok {
+  color: #22c55e;
+}
+
+.admin-status.warn {
+  color: #f59e0b;
+}
+
+.admin-issues {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+}
+
+.admin-issues li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}

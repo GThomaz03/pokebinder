@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchSpeciesVariants, type CardVariantEntry } from '../../api/tcgdex'
-import { getCachedTcgdexAvailability } from '../../api/cards/tcgdexHealth'
-import { cacheVariantPrice, ESTIMATED_BRL_HINT, formatPrice, seedCardBrief } from '../../api/prices'
+import { fetchSpeciesVariantsRepo } from '../../api/cards/cardRepository'
+import type { CardVariant } from '../../api/cards/types'
+import { getLastCatalogSource } from '../../api/cards/cardRepository'
+import { ESTIMATED_BRL_HINT, formatPrice, getCachedCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { CardSkeletonGrid } from '../Skeleton'
 import { useLanguage } from '../../hooks/useLanguage'
@@ -34,7 +35,7 @@ export function PokedexPanel({
 }: Props) {
   const { lang: globalLang } = useLanguage()
   const [cardLang, setCardLang] = useState<CardLang>(globalLang)
-  const [variants, setVariants] = useState<CardVariantEntry[]>([])
+  const [variants, setVariants] = useState<CardVariant[]>([])
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [catalogFallback, setCatalogFallback] = useState(false)
@@ -51,20 +52,20 @@ export function PokedexPanel({
     setQuery('')
     setVariants([])
     setCatalogFallback(false)
-    fetchSpeciesVariants(cardLang, slot.dexId, speciesName)
+    fetchSpeciesVariantsRepo(cardLang, slot.dexId, speciesName)
       .then((data) => {
         if (cancelled) return
         setVariants(data)
-        setCatalogFallback(getCachedTcgdexAvailability() === false)
+        setCatalogFallback(getLastCatalogSource() === 'pokemontcg')
         for (const v of data) {
           seedCardBrief({
             id: v.cardId,
             name: v.name,
             localId: v.localId,
             image: v.image,
-            price: v.price,
+            setId: v.setId,
+            setName: v.setName,
           })
-          cacheVariantPrice(v.key, v.price)
         }
       })
       .catch(() => {
@@ -233,7 +234,7 @@ export function PokedexPanel({
               const owned = slot.ownedCardIds.includes(card.key)
               const isTop = slot.topCardId === card.key
               const price = settings.showPrices
-                ? formatPrice(card.price, settings.priceMarket)
+                ? formatPrice(getCachedCard(card.cardId)?.price, settings.priceMarket)
                 : null
               return (
                 <article

@@ -6,6 +6,7 @@ import { baseCardId } from '../api/tcgdex'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
 import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { CardImage } from '../components/CardImage'
+import { isLegacyCatalogImage } from '../api/images/imageProvider'
 import { useFxRates } from '../hooks/useCardQueries'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
@@ -301,7 +302,7 @@ export function RepositoryPage() {
                 }}
               >
                 <CardImage
-                  src={c?.image}
+                  src={c?.image && !isLegacyCatalogImage(c.image) ? c.image : undefined}
                   alt={c?.name ?? ''}
                   quality="high"
                   cardId={baseCardId(e.key)}
@@ -315,7 +316,7 @@ export function RepositoryPage() {
                     {c?.setName ? ` · ${c.setName}` : ''}
                   </span>
                   <span className="price">
-                    {c?.price ? formatPrice(c.price, 'cardmarket') : '—'}
+                    {formatPrice(c?.price, 'cardmarket') ?? '—'}
                   </span>
                   <div className="qty" onClick={(ev) => ev.stopPropagation()}>
                     <button type="button" onClick={() => addQty(e.key, -1)}>

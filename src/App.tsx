@@ -21,6 +21,8 @@ import { FriendsPage } from './pages/Friends'
 import { MyProfilePage, PublicProfilePage } from './pages/Profile'
 import { RepositoryPage } from './pages/Repository'
 import { SettingsPage } from './pages/Settings'
+import { AdminDataPage } from './pages/admin/AdminData'
+import { AdminDataHealthPage } from './pages/admin/AdminDataHealth'
 import { SharedViewPage } from './pages/SharedView'
 
 export default function App() {
@@ -49,6 +51,8 @@ export default function App() {
                         <Route path="decks/:id" element={<DeckBuilderPage />} />
                         <Route path="perfil" element={<MyProfilePage />} />
                         <Route path="configuracoes" element={<SettingsPage />} />
+                        <Route path="admin/data" element={<AdminDataPage />} />
+                        <Route path="admin/data/health" element={<AdminDataHealthPage />} />
                         <Route path="amigos" element={<FriendsPage />} />
                         <Route path="u/:username" element={<PublicProfilePage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />

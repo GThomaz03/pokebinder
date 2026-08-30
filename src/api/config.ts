@@ -53,6 +53,6 @@ export const API_CONFIG = {
     cardsLegacy: 'pokebinder-cards-v1',
     pricesLegacy: 'pokebinder-prices-v1',
     fx: 'pokebinder-fx-v1',
-    imageUrls: 'pokebinder-img-urls-v1',
+    imageUrls: 'pokebinder-img-urls-v2',
   },
 } as const

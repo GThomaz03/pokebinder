@@ -55,6 +55,7 @@ export type FetchJsonOptions = {
   timeoutMs?: number
   maxRetries?: number
   signal?: AbortSignal
+  headers?: Record<string, string>
 }
 
 function tcgdxDirectUrl(proxyUrl: string): string | null {
@@ -118,7 +119,10 @@ async function fetchJsonOnce<T>(url: string, opts: FetchJsonOptions = {}): Promi
 
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
-      const res = await fetch(url, { signal: controller.signal })
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: opts.headers,
+      })
       if (res.status === 429) {
         const wait =
           parseRetryAfter(res.headers.get('Retry-After')) ??

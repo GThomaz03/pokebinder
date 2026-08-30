@@ -7,11 +7,13 @@ import { extractMarkets, type PricingBlock } from './pricingExtract'
 export type { PricingBlock } from './pricingExtract'
 export { extractMarkets, extractMarketsForVariant, pricingForVariant } from './pricingExtract'
 
+type QuoteOpts = PriceQuoteOptions & { source?: PriceSource }
+
 /** Build a PriceQuote from a TCGdex pricing block (+ optional FX). */
 export async function quoteFromPricing(
   cardId: string,
   pricing: PricingBlock | undefined,
-  opts: PriceQuoteOptions = {},
+  opts: QuoteOpts = {},
 ): Promise<PriceQuote> {
   const markets = extractMarkets(pricing)
   const market: PriceMarket = opts.market ?? 'cardmarket'
@@ -44,7 +46,7 @@ export async function quoteFromPricing(
   return {
     cardId: baseCardId(cardId),
     variantKey: opts.variantKey,
-    source: 'tcgdex',
+    source: opts.source ?? 'tcgdex',
     amount: amount ?? null,
     currency,
     markets: {
@@ -65,7 +67,7 @@ export async function quoteFromPricing(
 export function quoteFromPricingSync(
   cardId: string,
   pricing: PricingBlock | undefined,
-  opts: PriceQuoteOptions = {},
+  opts: QuoteOpts = {},
 ): PriceQuote {
   const markets = extractMarkets(pricing)
   const market: PriceMarket = opts.market ?? 'cardmarket'
@@ -89,7 +91,7 @@ export function quoteFromPricingSync(
   return {
     cardId: baseCardId(cardId),
     variantKey: opts.variantKey,
-    source: 'tcgdex',
+    source: opts.source ?? 'tcgdex',
     amount: amount ?? null,
     currency,
     markets: {
@@ -121,10 +123,15 @@ export function createTcgdexPriceProvider(
     async getQuote(cardId, opts = {}) {
       const lang = opts.lang ?? 'en'
       if (opts.pricingHint) {
-        return quoteFromPricing(cardId, opts.pricingHint, opts)
+        const hintMarkets = extractMarkets(opts.pricingHint)
+        if (hintMarkets.cardmarket != null || hintMarkets.tcgplayer != null) {
+          return quoteFromPricing(cardId, opts.pricingHint, opts)
+        }
       }
       const pricing = await fetchPricing(lang, baseCardId(cardId))
       if (!pricing) return null
+      const markets = extractMarkets(pricing)
+      if (markets.cardmarket == null && markets.tcgplayer == null) return null
       return quoteFromPricing(cardId, pricing, opts)
     },
   }

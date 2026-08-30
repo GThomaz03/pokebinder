@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { formatPrice, getCachedCard, hydrateCard } from '../../api/prices'
 import { extractMarketsForVariant } from '../../api/prices/pricingExtract'
-import { baseCardId, getCard, parseOwnedKey } from '../../api/tcgdex'
+import { baseCardId, parseOwnedKey } from '../../api/cardKeys'
+import { getCardById } from '../../api/cards/cardRepository'
 import { CardImage } from '../CardImage'
 import { useLanguage } from '../../hooks/useLanguage'
 import type { BinderSettings, PriceMarket } from '../../types'
@@ -52,31 +53,40 @@ export function CardDetailsModal({
     hydrateCard(fetchLang, cardKey, true).then(() => {
       if (!cancelled) setTick((t) => t + 1)
     })
-    getCard(fetchLang, cardId)
-      .then((card) => {
+    getCardById(fetchLang, cardId)
+      .then(async (card) => {
         if (cancelled || !card) return
-        const full = card as {
-          rarity?: string
-          illustrator?: string
-          types?: string[]
-          set?: { cardCount?: { official?: number; total?: number } }
-          variants?: Record<string, boolean>
-          variants_detailed?: Array<{
+        const { supabase } = await import('../../lib/supabase')
+        let rawData: Record<string, unknown> | null = null
+        if (supabase) {
+          const { data } = await supabase
+            .from('cards')
+            .select('raw_data')
+            .eq('canonical_id', cardId)
+            .maybeSingle()
+          rawData = (data?.raw_data as Record<string, unknown>) ?? null
+        }
+        const full = {
+          ...card,
+          ...(rawData ?? {}),
+          set: {
+            name: card.setName,
+            cardCount: { total: undefined as number | undefined, official: undefined as number | undefined },
+          },
+          variants: rawData?.variants as Record<string, boolean> | undefined,
+          variants_detailed: rawData?.variants_detailed as Array<{
             type: string
             stamp?: string[]
             foil?: string
-            pricing?: {
-              cardmarket?: { avg?: number | null }
-              tcgplayer?: Record<string, { marketPrice?: number | null } | null>
-            }
-          }>
-          pricing?: {
+            pricing?: unknown
+          }> | undefined,
+          pricing: rawData?.pricing as {
             cardmarket?: { avg?: number | null }
             tcgplayer?: Record<string, { marketPrice?: number | null } | null>
-          }
+          } | undefined,
+          illustrator: card.illustrator,
         }
-        const setTotal =
-          full.set?.cardCount?.total ?? full.set?.cardCount?.official
+        const setTotal = undefined
         setMeta({
           rarity: full.rarity,
           illustrator: full.illustrator,
@@ -90,8 +100,8 @@ export function CardDetailsModal({
             const extras = [...(v.stamp ?? []), ...(v.foil ? [v.foil] : [])]
             const key = [cardId, fetchLang, v.type, ...extras].join('::')
             const { eur, usd } = extractMarketsForVariant(
-              full.pricing,
-              v.pricing,
+              full.pricing as import('../../api/prices/pricingExtract').PricingBlock | undefined,
+              v.pricing as import('../../api/prices/pricingExtract').PricingBlock | undefined,
               v.type,
               settings.priceMarket,
             )

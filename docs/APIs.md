@@ -33,6 +33,7 @@ Este documento descreve **todas as APIs e serviços externos** usados pelo Poké
 | **assets.tcgdex.net** | CDN de imagens | Público | `src/api/images/imageProvider.ts` |
 | **images.pokemontcg.io** | CDN de imagens (fallback) | Público | `imageProvider.ts` |
 | **open.er-api.com** | Câmbio EUR/USD → BRL | Público | `src/api/fx/fxProvider.ts` |
+| **Pokémon TCG API** | Preços TCGPlayer/Cardmarket (fallback + sync) | Opcional `POKEMON_TCG_API_KEY` | `src/api/prices/pokemonTcgPriceProvider.ts` |
 | **Hugging Face** | Download do modelo MobileCLIP | Público | `src/lib/scan/clip.worker.ts` |
 | **jsDelivr (Tesseract)** | Worker/WASM/lang OCR | Público | `src/lib/scan/ocr.ts` |
 | **`/scan/*`** | Arquivos estáticos do app | N/A | `public/scan/` |
@@ -60,6 +61,14 @@ src/api/
 ```
 
 Preços convertidos para BRL são sempre **estimados** (`PriceQuote.estimated = true`).
+
+### Resolução de preços (runtime)
+
+1. **Supabase** — `cards.raw_data.pricing` ou linhas em `card_prices` (populadas por `npm run cards:sync-prices`)
+2. **TCGdex** — bloco `pricing` embutido no catálogo (quando disponível)
+3. **Pokémon TCG API** — fetch live via `/api/pokemontcg` (proxy) ou direto em scripts CLI
+
+Sync de preços: `npm run cards:sync-prices` (opcional `--set=me2`, `--force`). Recomenda-se `POKEMON_TCG_API_KEY` no `.env` para rate limits maiores.
 
 ---
 
@@ -608,7 +617,7 @@ Na Vercel, as mesmas variáveis devem estar em **Project Settings → Environmen
 | Perfil, amigos, publicar | Supabase `profiles` / `follows` / `published_resources` / Storage |
 | Fichário colaborativo | Supabase tabelas + RPC + Realtime |
 | Buscar / detalhar cartas | TCGdex SDK |
-| Preço em R$ | TCGdex pricing + open.er-api.com |
+| Preço em R$ | Supabase `card_prices` → TCGdex → **Pokémon TCG API** + open.er-api.com |
 | Arte da carta | assets.tcgdex.net (+ fallback pokemontcg.io) |
 | Scanner por câmera | HF MobileCLIP + Tesseract + `/scan/*` + TCGdex REST |
 | Boosters sealed | Dados locais (sem API) |

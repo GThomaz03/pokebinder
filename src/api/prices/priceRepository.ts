@@ -1,20 +1,32 @@
 import type { CachedCard, CardLang, CardPrice, PriceMarket } from '../../types'
 import { API_CONFIG } from '../config'
-import { cardImageUrl, inferMissingImageCandidates } from '../images/imageProvider'
+import { cardImageUrl, inferMissingImageCandidates, isLegacyCatalogImage } from '../images/imageProvider'
 import { getCachedFxRates, getFxRates, toBrl } from '../fx/fxProvider'
-import { baseCardId, parseOwnedKey } from '../cardKeys'
-import { createTcgdexPriceProvider, quoteFromPricing } from './tcgdexPriceProvider'
+import { baseCardId, catalogCardIdCandidates, parseOwnedKey } from '../cardKeys'
+import { createTcgdexPriceProvider, quoteFromPricing, extractMarkets } from './tcgdexPriceProvider'
+import { pokemonTcgPriceProvider } from './pokemonTcgPriceProvider'
 import type { PriceProvider, PriceQuote, PriceQuoteOptions } from './types'
-import { getCard } from '../tcgdex'
+import { getCardById } from '../cards/cardRepository'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 
 const tcgdexPriceProvider = createTcgdexPriceProvider(async (lang, cardId) => {
-  const card = await getCard(lang as CardLang, cardId)
-  return (card as { pricing?: PriceQuoteOptions['pricingHint'] } | undefined)?.pricing
+  const card = await getCardById(lang as CardLang, cardId)
+  if (!card || !isSupabaseConfigured || !supabase) return undefined
+  for (const cid of catalogCardIdCandidates(cardId)) {
+    const { data } = await supabase
+      .from('cards')
+      .select('raw_data')
+      .eq('canonical_id', cid)
+      .maybeSingle()
+    const rd = data?.raw_data as { pricing?: PriceQuoteOptions['pricingHint'] } | undefined
+    if (rd?.pricing) return rd.pricing
+  }
+  return undefined
 })
 
-const providers: PriceProvider[] = [tcgdexPriceProvider]
+const providers: PriceProvider[] = [tcgdexPriceProvider, pokemonTcgPriceProvider]
 
-/** Active providers — today only TCGdex; more can be appended later. */
+/** Active price providers — Supabase/TCGdex first, then Pokémon TCG API live. */
 export function getPriceProviders(): PriceProvider[] {
   return providers
 }
@@ -26,7 +38,14 @@ export async function getPriceQuote(
   for (const provider of providers) {
     try {
       const quote = await provider.getQuote(cardId, opts)
-      if (quote) return quote
+      if (
+        quote &&
+        (quote.amount != null ||
+          quote.markets.cardmarket != null ||
+          quote.markets.tcgplayer != null)
+      ) {
+        return quote
+      }
     } catch {
       /* try next provider */
     }
@@ -36,10 +55,11 @@ export async function getPriceQuote(
 
 export function quoteToLegacyPrice(quote: PriceQuote | null | undefined): CardPrice {
   if (!quote) return { updated: 0 }
+  const hasValue = quote.markets.cardmarket != null || quote.markets.tcgplayer != null
   return {
     eur: quote.markets.cardmarket,
     usd: quote.markets.tcgplayer,
-    updated: quote.updatedAt,
+    updated: hasValue ? quote.updatedAt : 0,
   }
 }
 
@@ -134,6 +154,29 @@ const CARD_KEY = API_CONFIG.storageKeys.cardsLegacy
 type PriceMap = Record<string, CardPrice>
 type CardMap = Record<string, CachedCard>
 
+function isStubCardEntry(id: string, card: CachedCard): boolean {
+  const base = baseCardId(id)
+  return !card.name || card.name === id || card.name === base
+}
+
+/** Drop legacy stubs and broken image URLs so hydrate refetches from Supabase. */
+function sanitizeCardCache(raw: CardMap): CardMap {
+  const out: CardMap = {}
+  for (const [id, card] of Object.entries(raw)) {
+    if (isStubCardEntry(id, card)) continue
+    if (isLegacyCatalogImage(card.image)) {
+      out[id] = { ...card, image: undefined }
+      continue
+    }
+    if (card.price?.updated && card.price.eur == null && card.price.usd == null) {
+      out[id] = { ...card, price: { updated: 0 } }
+      continue
+    }
+    out[id] = card
+  }
+  return out
+}
+
 function loadJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
@@ -145,7 +188,15 @@ function loadJson<T>(key: string, fallback: T): T {
 }
 
 let priceCache: PriceMap = loadJson(PRICE_KEY, {})
-let cardCache: CardMap = loadJson(CARD_KEY, {})
+const loadedCards = loadJson(CARD_KEY, {})
+let cardCache: CardMap = sanitizeCardCache(loadedCards)
+if (JSON.stringify(loadedCards) !== JSON.stringify(cardCache)) {
+  try {
+    localStorage.setItem(CARD_KEY, JSON.stringify(cardCache))
+  } catch {
+    /* ignore */
+  }
+}
 
 function persistPrices() {
   try {
@@ -171,6 +222,25 @@ export function getCachedPrice(id: string): CardPrice | undefined {
   return priceCache[id] ?? priceCache[baseCardId(id)] ?? getCachedCard(id)?.price
 }
 
+function hasPricingData(pricing?: PriceQuoteOptions['pricingHint']): boolean {
+  if (!pricing) return false
+  const markets = extractMarkets(pricing)
+  return markets.cardmarket != null || markets.tcgplayer != null
+}
+
+function numPrice(v: unknown): number | undefined {
+  if (v == null || v === '') return undefined
+  const n = Number(v)
+  return Number.isFinite(n) ? n : undefined
+}
+
+function isResolvedCardImageUrl(url: string): boolean {
+  if (/\.(webp|png|jpg|jpeg)(\?.*)?$/i.test(url)) return true
+  if (/scrydex\.com\/pokemon\//i.test(url) && /\/(large|small)$/i.test(url)) return true
+  if (/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(url)) return true
+  return false
+}
+
 export async function hydrateCard(
   lang: CardLang,
   id: string,
@@ -181,49 +251,123 @@ export async function hydrateCard(
   const fetchLang = parsed.lang ?? lang
   const existing = cardCache[cardId]
   const imageLooksRaw =
-    Boolean(existing?.image) &&
-    !/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(existing!.image!)
+    Boolean(existing?.image) && !isResolvedCardImageUrl(existing!.image!)
+  const looksLikeStub = Boolean(existing) && isStubCardEntry(cardId, existing!)
+  const legacyImage = Boolean(existing?.image) && isLegacyCatalogImage(existing!.image)
+  const priceMissing = !existing?.price?.eur && !existing?.price?.usd
   const stale =
     !existing ||
     !existing.image ||
     imageLooksRaw ||
+    looksLikeStub ||
+    legacyImage ||
+    priceMissing ||
     force ||
-    Date.now() - (existing.price.updated || 0) > API_CONFIG.cache.priceStaleTimeMs
+    Date.now() - (existing?.price.updated || 0) > API_CONFIG.cache.priceStaleTimeMs
 
   if (existing && !stale && !force && !parsed.lang && existing.image) return existing
 
   try {
-    // Single REST fetch (avoids SDK localStorage quota crashes + double getCard for price)
-    let raw = (await getCard(fetchLang, cardId)) as
-      | {
-          id: string
-          name?: string
-          localId?: string | number
-          image?: string
-          set?: { id?: string; name?: string }
-          illustrator?: string
-          rarity?: string
-          types?: string[]
-          dexId?: number[]
-          pricing?: PriceQuoteOptions['pricingHint']
+    const normalized = await getCardById(fetchLang, cardId)
+    let raw: {
+      id: string
+      name?: string
+      localId?: string | number
+      image?: string
+      set?: { id?: string; name?: string }
+      illustrator?: string
+      rarity?: string
+      types?: string[]
+      dexId?: number[]
+      pricing?: PriceQuoteOptions['pricingHint']
+    } | null = normalized
+
+    if (normalized) {
+      raw = {
+        id: normalized.id,
+        name: normalized.name,
+        localId: normalized.localId,
+        image: normalized.image ?? normalized.imageBase,
+        set: { id: normalized.setId, name: normalized.setName },
+        illustrator: normalized.illustrator,
+        rarity: normalized.rarity,
+        types: normalized.types,
+        dexId: normalized.dexId,
+      }
+    }
+
+    if (normalized && isSupabaseConfigured && supabase) {
+      for (const cid of catalogCardIdCandidates(cardId)) {
+        const { data: cardRow } = await supabase
+          .from('cards')
+          .select('id, raw_data')
+          .eq('canonical_id', cid)
+          .maybeSingle()
+        if (!cardRow) continue
+        if (cardRow.raw_data && typeof cardRow.raw_data === 'object') {
+          const rd = cardRow.raw_data as { pricing?: PriceQuoteOptions['pricingHint'] }
+          if (rd.pricing && hasPricingData(rd.pricing)) {
+            raw = { ...raw!, pricing: rd.pricing }
+            break
+          }
         }
-      | undefined
-      | null
+        const { data: prices } = await supabase
+          .from('card_prices')
+          .select('market, mid, low, high, currency')
+          .eq('card_id', cardRow.id)
+        if (prices?.length && raw) {
+          const cm = prices.find((p) => p.market === 'cardmarket')
+          const tcg = prices.find((p) => p.market === 'tcgplayer')
+          raw.pricing = {
+            cardmarket: cm
+              ? {
+                  avg: numPrice(cm.mid),
+                  low: numPrice(cm.low),
+                  trend: numPrice(cm.mid),
+                }
+              : undefined,
+            tcgplayer: tcg
+              ? {
+                  normal: {
+                    marketPrice: numPrice(tcg.mid),
+                    lowPrice: numPrice(tcg.low),
+                    highPrice: numPrice(tcg.high),
+                  },
+                }
+              : undefined,
+          } as PriceQuoteOptions['pricingHint']
+          if (hasPricingData(raw.pricing)) break
+        }
+      }
+    }
 
     if (!raw && fetchLang !== 'en') {
-      raw = (await getCard('en', cardId)) as typeof raw
+      const enNorm = await getCardById('en', cardId)
+      if (enNorm) {
+        raw = {
+          id: enNorm.id,
+          name: enNorm.name,
+          localId: enNorm.localId,
+          image: enNorm.imageBase ?? enNorm.image,
+          set: { id: enNorm.setId, name: enNorm.setName },
+          illustrator: enNorm.illustrator,
+          rarity: enNorm.rarity,
+          types: enNorm.types,
+          dexId: enNorm.dexId,
+        }
+      }
     }
     if (!raw?.id) {
       const localId =
         existing?.localId ||
         (cardId.includes('-') ? cardId.slice(cardId.lastIndexOf('-') + 1) : '')
       const image =
-        existing?.image ||
+        (existing?.image && !isLegacyCatalogImage(existing.image) ? existing.image : undefined) ||
         inferMissingImageCandidates({
           cardId,
           name: existing?.name,
           localId,
-        })[0]
+        }).find((u) => !isLegacyCatalogImage(u))
       if (!image && !existing) return null
       const stub: CachedCard = {
         id: cardId,
@@ -248,9 +392,11 @@ export async function hydrateCard(
     }
 
     let image = cardImageUrl(raw.image, 'high')
+    if (isLegacyCatalogImage(image)) image = undefined
     if (!image && fetchLang !== 'en') {
-      const en = (await getCard('en', cardId)) as { image?: string } | undefined
-      image = cardImageUrl(en?.image, 'high')
+      const enNorm = await getCardById('en', cardId)
+      image = cardImageUrl(enNorm?.imageBase ?? enNorm?.image, 'high')
+      if (isLegacyCatalogImage(image)) image = undefined
     }
     if (!image) {
       image =
@@ -258,13 +404,19 @@ export async function hydrateCard(
           cardId,
           name: raw.name || existing?.name,
           localId: raw.localId ?? existing?.localId,
-        })[0] ?? existing?.image
+        }).find((u) => !isLegacyCatalogImage(u)) ?? undefined
     }
 
-    const quote = await quoteFromPricing(cardId, raw.pricing, {
-      lang: fetchLang,
-      market: 'cardmarket',
-    })
+    const quote = hasPricingData(raw.pricing)
+      ? await quoteFromPricing(cardId, raw.pricing, {
+          lang: fetchLang,
+          market: 'cardmarket',
+          source: 'pokemontcg',
+        })
+      : await getPriceQuote(cardId, {
+          lang: fetchLang,
+          market: 'cardmarket',
+        })
     const price = quoteToLegacyPrice(quote)
 
     const cached: CachedCard = {

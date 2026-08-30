@@ -1,45 +1,48 @@
 /** Persists which image URL actually loaded for a card/src, so remounts skip failed candidates. */
 
-const STORAGE_KEY = 'pokebinder-img-urls-v1'
+import { API_CONFIG } from './config'
+import { isLegacyCatalogImage } from './images/imageProvider'
+
+const STORAGE_KEY = API_CONFIG.storageKeys.imageUrls
+const LEGACY_STORAGE_KEY = 'pokebinder-img-urls-v1'
 
 type ImageUrlMap = Record<string, string>
+
+function shouldDropImageUrl(url: string): boolean {
+  return isLegacyCatalogImage(url)
+}
 
 function load(): ImageUrlMap {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = (JSON.parse(raw) as ImageUrlMap) ?? {}
-    // Drop remembered PokémonTCG.io URLs that used raw TCGdex set ids (e.g. sv03.5 → 404).
-    // Also drop TCGdex bases without /high|/low (always 404) and short set forms (sv3.5).
-    let changed = false
-    const next: ImageUrlMap = {}
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v !== 'string') {
-        changed = true
-        continue
+    if (raw) {
+      const parsed = (JSON.parse(raw) as ImageUrlMap) ?? {}
+      let changed = false
+      const next: ImageUrlMap = {}
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v !== 'string' || shouldDropImageUrl(v)) {
+          changed = true
+          continue
+        }
+        next[k] = v
       }
-      if (/images\.pokemontcg\.io\/[^/]*\d\.\d\//.test(v)) {
-        changed = true
-        continue
+      if (changed) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
       }
-      if (/assets\.tcgdex\.net\//i.test(v) && !/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(v)) {
-        changed = true
-        continue
-      }
-      if (/assets\.tcgdex\.net\/[^/]+\/sv\/sv\d\.\d\//i.test(v)) {
-        changed = true
-        continue
-      }
-      next[k] = v
+      return next
     }
-    if (changed) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-      } catch {
-        /* ignore */
-      }
+
+    // One-time reset: drop v1 cache that stored TCGdex card-back URLs.
+    try {
+      localStorage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {
+      /* ignore */
     }
-    return next
+    return {}
   } catch {
     return {}
   }
@@ -71,11 +74,16 @@ export function imageCacheKey(parts: {
 
 export function getCachedImageUrl(key: string): string | undefined {
   if (!key || key === '::high' || key === '::low') return undefined
-  return cache[key]
+  const url = cache[key]
+  if (url && isLegacyCatalogImage(url)) {
+    clearCachedImageUrl(key, url)
+    return undefined
+  }
+  return url
 }
 
 export function setCachedImageUrl(key: string, url: string) {
-  if (!key || !url) return
+  if (!key || !url || isLegacyCatalogImage(url)) return
   if (cache[key] === url) return
   cache = { ...cache, [key]: url }
   persistSoon()

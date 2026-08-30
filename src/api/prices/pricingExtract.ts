@@ -9,7 +9,10 @@ export type PricingBlock = {
     'trend-holo'?: number | null
     'low-holo'?: number | null
   }
-  tcgplayer?: Record<string, { marketPrice?: number | null } | null> | null
+  tcgplayer?: Record<
+    string,
+    { marketPrice?: number | null; lowPrice?: number | null; highPrice?: number | null } | null
+  > | null
 }
 
 const TCGPLAYER_KEYS_BY_VARIANT: Record<string, string[]> = {

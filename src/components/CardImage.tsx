@@ -5,7 +5,7 @@ import {
   imageCacheKey,
   setCachedImageUrl,
 } from '../api/imageCache'
-import { cardImageCandidates, inferMissingImageCandidates } from '../api/images/imageProvider'
+import { cardImageCandidates, inferMissingImageCandidates, isLegacyCatalogImage } from '../api/images/imageProvider'
 import './Skeleton.css'
 
 /** Browser-cached images can finish before React attaches onLoad; complete stays true. */
@@ -41,10 +41,12 @@ function buildCandidates(
   const urls: string[] = []
 
   if (src) {
-    // Expand base OR full URLs into locale/quality/format matrix.
-    // Raw TCGdex bases without /high.webp|/low.webp always 404 on the CDN.
-    for (const u of cardImageCandidates(src, quality)) {
-      if (!urls.includes(u)) urls.push(u)
+    if (!isLegacyCatalogImage(src)) {
+      // Expand base OR full URLs into locale/quality/format matrix.
+      // Raw TCGdex bases without /high.webp|/low.webp always 404 on the CDN.
+      for (const u of cardImageCandidates(src, quality)) {
+        if (!urls.includes(u)) urls.push(u)
+      }
     }
   }
 
@@ -55,7 +57,7 @@ function buildCandidates(
       localId: meta.localId,
       energyType: meta.energyType,
     })) {
-      if (!urls.includes(u)) urls.push(u)
+      if (!urls.includes(u) && !isLegacyCatalogImage(u)) urls.push(u)
     }
   }
 
@@ -94,8 +96,10 @@ export function CardImage({
     const hit = getCachedImageUrl(cacheKey)
     // Only prefer a remembered URL if it is still one of our candidates.
     // Foreign/stale hits (e.g. old 404 paths) must not jump the queue.
-    if (hit && list.includes(hit)) return [hit, ...list.filter((u) => u !== hit)]
-    if (hit && !list.includes(hit)) clearCachedImageUrl(cacheKey, hit)
+    if (hit && !isLegacyCatalogImage(hit) && list.includes(hit)) {
+      return [hit, ...list.filter((u) => u !== hit)]
+    }
+    if (hit && (!list.includes(hit) || isLegacyCatalogImage(hit))) clearCachedImageUrl(cacheKey, hit)
     return list
   }, [src, quality, cardId, localId, cardName, energyType, cacheKey])
 

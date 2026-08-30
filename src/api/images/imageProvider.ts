@@ -1,8 +1,18 @@
 import type { CardLang } from '../../types'
 import { API_CONFIG } from '../config'
-import { baseCardId } from '../cardKeys'
+import { baseCardId, catalogCardIdCandidates, normalizeCatalogCardId, normalizeCatalogSetId } from '../cardKeys'
 
 export { baseCardId }
+
+/** URLs that load card backs / 404 placeholders — must not be cached or reused. */
+export function isLegacyCatalogImage(url: string | undefined | null): boolean {
+  if (!url) return false
+  // Any TCGdex CDN (assets.tcgdex.net, images.tcgdex.com, …) — often card-back placeholders.
+  if (/tcgdex\.(net|com)/i.test(url)) return true
+  if (/images\.pokemontcg\.io\/(me0\d|sv0\d)/i.test(url)) return true
+  if (/images\.pokemontcg\.io\/[^/]*\d\.\d\//i.test(url)) return true
+  return false
+}
 
 /** Scarlet & Violet Energy (sve) basic prints — reliable art for nameless TCGdex energies. */
 const BASIC_ENERGY_SVE_INDEX: Record<string, number> = {
@@ -133,13 +143,49 @@ export function canonicalizeTcgdexSetId(setId: string): string {
 }
 
 export function toPokemonTcgIoSetId(setId: string): string {
-  const canonical = canonicalizeTcgdexSetId(setId)
-  if (!canonical.includes('.')) return canonical
-  return canonical.replace(/0+(\d)/g, '$1').replace(/\./g, 'pt')
+  return normalizeCatalogSetId(setId)
 }
 
 const IMAGE_FILE_RE = /\.(webp|png|jpg|jpeg)(\?.*)?$/i
 const IMAGE_QUALITY_RE = /\/(high|low)\.(webp|png|jpg|jpeg)(\?.*)?$/i
+const POKEMON_TCG_IO_RE = /^https:\/\/images\.pokemontcg\.io\//i
+const SCRYDEX_RE = /^https:\/\/images\.scrydex\.com\/pokemon\//i
+
+function scrydexCandidates(url: string, quality: 'high' | 'low'): string[] {
+  const out: string[] = []
+  const large = /\/small$/i.test(url) ? url.replace(/\/small$/i, '/large') : url.replace(/\/large$/i, '/large')
+  const small = /\/large$/i.test(url) ? url.replace(/\/large$/i, '/small') : url.replace(/\/small$/i, '/small')
+  if (!/\/(large|small)$/i.test(url)) {
+    pushUnique(out, `${url.replace(/\/$/, '')}/large`)
+    pushUnique(out, `${url.replace(/\/$/, '')}/small`)
+  } else {
+    pushUnique(out, large)
+    pushUnique(out, small)
+  }
+  return quality === 'high' ? out : [...out].reverse()
+}
+
+function scrydexCandidatesForCardId(cardId: string): string[] {
+  const out: string[] = []
+  for (const id of catalogCardIdCandidates(cardId)) {
+    pushUnique(out, `https://images.scrydex.com/pokemon/${id}/large`)
+    pushUnique(out, `https://images.scrydex.com/pokemon/${id}/small`)
+  }
+  return out
+}
+
+function pokemonTcgIoCandidates(url: string): string[] {
+  const out: string[] = []
+  const trimmed = url.replace(/\/$/, '')
+  if (/_hires$/i.test(trimmed)) {
+    pushUnique(out, `${trimmed}.png`)
+    pushUnique(out, `${trimmed.replace(/_hires$/i, '')}.png`)
+    return out
+  }
+  pushUnique(out, `${trimmed}.png`)
+  pushUnique(out, `${trimmed}_hires.png`)
+  return out
+}
 
 /** Strip `/high.webp` (etc.) so we can rebuild quality/format/locale variants. */
 export function stripCardImageQuality(url: string): string {
@@ -157,6 +203,10 @@ export function cardImageUrl(
   if (!imageBase) return undefined
   if (IMAGE_QUALITY_RE.test(imageBase)) return imageBase
   if (IMAGE_FILE_RE.test(imageBase)) return imageBase
+  if (SCRYDEX_RE.test(imageBase)) {
+    const candidates = scrydexCandidates(imageBase, quality)
+    return candidates[0]
+  }
   return `${imageBase.replace(/\/$/, '')}/${quality}.webp`
 }
 
@@ -165,6 +215,25 @@ export function cardImageCandidates(
   quality: 'high' | 'low' = 'low',
 ): string[] {
   if (!imageBase) return []
+
+  if (IMAGE_FILE_RE.test(imageBase)) {
+    const out = [imageBase]
+    if (/_hires\.(png|jpg|jpeg|webp)/i.test(imageBase)) {
+      pushUnique(out, imageBase.replace(/_hires(\.(png|jpg|jpeg|webp))/i, '$1'))
+    } else {
+      pushUnique(out, imageBase.replace(/(\.(png|jpg|jpeg|webp))(\?.*)?$/i, '_hires$1'))
+    }
+    return quality === 'high' ? out : [...out].reverse()
+  }
+
+  if (POKEMON_TCG_IO_RE.test(imageBase)) {
+    const out = pokemonTcgIoCandidates(imageBase)
+    return quality === 'high' ? [...out].reverse() : out
+  }
+
+  if (SCRYDEX_RE.test(imageBase)) {
+    return scrydexCandidates(imageBase, quality)
+  }
 
   const root = stripCardImageQuality(imageBase).replace(/\/$/, '')
   const out: string[] = []
@@ -233,10 +302,19 @@ export function inferMissingImageCandidates(opts: {
   const setId = dash > 0 ? id.slice(0, dash) : ''
   const raw = dash > 0 ? String(opts.localId ?? id.slice(dash + 1)) : String(opts.localId ?? '')
   const stripped = raw.replace(/^0+/, '') || (raw ? '0' : '')
-  const localIds = [...new Set([raw, stripped].filter(Boolean))]
+  const catalogId = normalizeCatalogCardId(id)
+  const catalogDash = catalogId.lastIndexOf('-')
+  const catalogNum = catalogDash > 0 ? catalogId.slice(catalogDash + 1) : ''
+  const catalogSetId = catalogDash > 0 ? catalogId.slice(0, catalogDash) : normalizeCatalogSetId(setId)
+  const localIds = [...new Set([raw, stripped, catalogNum].filter(Boolean))]
   const ioBase = API_CONFIG.pokemonTcgIo.imagesBaseUrl
   const typeKey = detectBasicEnergyTypeKey(opts.name, opts.energyType)
   const isEnergySet = ENERGY_SET_IDS.has(setId.toLowerCase()) || Boolean(typeKey)
+
+  // Newer sets (me5, etc.) — Scrydex before pokemontcg.io / TCGdex assets.
+  if (dash > 0) {
+    for (const u of scrydexCandidatesForCardId(id)) pushUnique(urls, u)
+  }
 
   // Basic Energy: TCGdex almost never ships `image`; prefer SVE prints on PokémonTCG.io.
   if (typeKey) {
@@ -250,24 +328,25 @@ export function inferMissingImageCandidates(opts: {
     pushPokemonTcgIo(urls, ioBase, setId, localIds)
   }
 
+  // PokémonTCG.io before TCGdex assets — TCGdex CDN often serves card-back placeholders for newer sets.
+  if (dash > 0 && !isEnergySet && pokemonTcgIoSupported(catalogSetId)) {
+    pushPokemonTcgIo(urls, ioBase, catalogSetId, localIds)
+  }
+
   for (const lang of ['en', 'pt'] as const) {
     for (const lid of localIds.length ? localIds : ['']) {
       const base = inferTcgdexImageBase(id, lang, lid || undefined)
       if (!base) continue
       for (const u of cardImageCandidates(base, 'high')) {
-        pushUnique(urls, u)
+        if (!isLegacyCatalogImage(u)) pushUnique(urls, u)
       }
       for (const u of cardImageCandidates(base, 'low')) {
-        pushUnique(urls, u)
+        if (!isLegacyCatalogImage(u)) pushUnique(urls, u)
       }
     }
   }
 
-  if (dash > 0 && !isEnergySet && pokemonTcgIoSupported(setId)) {
-    pushPokemonTcgIo(urls, ioBase, setId, localIds)
-  }
-
-  return urls
+  return urls.filter((u) => !isLegacyCatalogImage(u))
 }
 
 
