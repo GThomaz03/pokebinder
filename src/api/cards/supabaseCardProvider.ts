@@ -119,6 +119,60 @@ const CARD_SELECT = `
   sets (source_id, name, en_name, pt_name, serie_slug)
 `
 
+const BATCH_CHUNK = 100
+
+/** Batch lookup for export / bulk UI — Supabase only, no external APIs. */
+export async function fetchCardsByIds(
+  lang: CardLang,
+  ids: string[],
+): Promise<Map<string, NormalizedCard>> {
+  const result = new Map<string, NormalizedCard>()
+  if (!supabase || !ids.length) return result
+
+  const requestedIds = [...new Set(ids.map((id) => baseCardId(id).toLowerCase()))]
+  const candidatesByRequested = new Map<string, string[]>()
+  const allCandidates = new Set<string>()
+
+  for (const reqId of requestedIds) {
+    const cands = catalogCardIdCandidates(reqId)
+    candidatesByRequested.set(reqId, cands)
+    for (const c of cands) allCandidates.add(c)
+  }
+
+  const canonicalToCard = new Map<string, NormalizedCard>()
+  const candidateList = [...allCandidates]
+
+  for (let i = 0; i < candidateList.length; i += BATCH_CHUNK) {
+    const chunk = candidateList.slice(i, i + BATCH_CHUNK)
+    const { data, error } = await supabase
+      .from('cards')
+      .select(CARD_SELECT)
+      .in('canonical_id', chunk)
+    if (error || !data?.length) continue
+
+    const trs = await fetchTranslation(
+      data.map((d) => d.canonical_id),
+      lang,
+    )
+    for (const row of data) {
+      const card = mapCard(asDbCard(row), lang, trs.get(row.canonical_id))
+      canonicalToCard.set(row.canonical_id, card)
+    }
+  }
+
+  for (const reqId of requestedIds) {
+    for (const cid of candidatesByRequested.get(reqId) ?? []) {
+      const hit = canonicalToCard.get(cid)
+      if (hit) {
+        result.set(reqId, reqId !== hit.id ? { ...hit, id: reqId } : hit)
+        break
+      }
+    }
+  }
+
+  return result
+}
+
 export const supabaseCardProvider: CardProvider = {
   async getById(lang, id) {
     if (!supabase) return null

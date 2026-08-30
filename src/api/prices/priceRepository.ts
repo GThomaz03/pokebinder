@@ -450,6 +450,8 @@ export function seedCardBrief(brief: {
   price?: CardPrice
   setId?: string
   setName?: string
+  rarity?: string
+  types?: string[]
 }): CachedCard {
   const id = baseCardId(brief.id)
   const existing = cardCache[id]
@@ -464,8 +466,8 @@ export function seedCardBrief(brief: {
     setName: brief.setName ?? existing?.setName,
     price: brief.price?.updated ? brief.price : existing?.price ?? { updated: 0 },
     illustrator: existing?.illustrator,
-    rarity: existing?.rarity,
-    types: existing?.types,
+    rarity: brief.rarity ?? existing?.rarity,
+    types: brief.types ?? existing?.types,
     dexId: existing?.dexId,
   }
   cardCache = { ...cardCache, [id]: cached }

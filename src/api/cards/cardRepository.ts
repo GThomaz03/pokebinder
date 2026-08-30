@@ -11,7 +11,11 @@ import type {
   SetMeta,
 } from './types'
 import { tcgdexCardProvider } from './tcgdexCardProvider'
-import { supabaseCardProvider, isCatalogPopulated } from './supabaseCardProvider'
+import {
+  supabaseCardProvider,
+  isCatalogPopulated,
+  fetchCardsByIds,
+} from './supabaseCardProvider'
 import { isTcgdexAvailable, getCachedTcgdexAvailability } from './tcgdexHealth'
 import { getPokemonTcgCardById, searchPokemonTcgCards } from './pokemonTcgProvider'
 
@@ -50,6 +54,22 @@ function usingSupabaseCatalog(): boolean {
 
 function usesSupabase(provider: CardProvider) {
   return provider === supabaseCardProvider
+}
+
+/** Batch card metadata from Supabase catalog only (no Pokémon TCG / TCGdex). */
+export async function getCardsByIdsRepo(
+  lang: CardLang,
+  ids: string[],
+): Promise<Map<string, NormalizedCard>> {
+  const unique = [...new Set(ids.filter(Boolean).map((id) => id.toLowerCase()))]
+  if (!unique.length) return new Map()
+
+  const provider = await ensureProvider()
+  if (usesSupabase(provider)) {
+    lastCatalogSource = 'supabase'
+    return fetchCardsByIds(lang, unique)
+  }
+  return new Map()
 }
 
 export async function getCardById(

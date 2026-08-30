@@ -4,8 +4,41 @@
 }
 
 .repo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.repo-head > div {
   display: grid;
   gap: 0.15rem;
+  min-width: 0;
+}
+
+.repo-export-liga {
+  flex-shrink: 0;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.95rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--btn-radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.repo-export-liga:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.repo-export-liga:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .repo-head h1 {

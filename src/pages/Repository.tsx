@@ -6,6 +6,7 @@ import { baseCardId } from '../api/tcgdex'
 import { AddCardsModal } from '../components/binder/AddCardsModal'
 import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { CardImage } from '../components/CardImage'
+import { ExportLigaModal } from '../components/ExportLigaModal'
 import { isLegacyCatalogImage } from '../api/images/imageProvider'
 import { useFxRates } from '../hooks/useCardQueries'
 import { useInventory } from '../hooks/useInventory'
@@ -64,6 +65,7 @@ export function RepositoryPage() {
   const [pinnedIds, setPinnedIds] = useState<string[]>(loadPinned)
   const [expanded, setExpanded] = useState(false)
   const [sort, setSort] = useState<RepoSort>(loadSort)
+  const [ligaExportOpen, setLigaExportOpen] = useState(false)
   const detailsSettings = useMemo(() => defaultSettings(), [])
   useFxRates(true)
 
@@ -174,6 +176,14 @@ export function RepositoryPage() {
             automaticamente com pelo menos 1.
           </p>
         </div>
+        <button
+          type="button"
+          className="repo-export-liga"
+          disabled={entries.length === 0}
+          onClick={() => setLigaExportOpen(true)}
+        >
+          Exportar Liga Pokémon
+        </button>
       </header>
 
       <section className="set-progress">
@@ -359,6 +369,13 @@ export function RepositoryPage() {
           onClose={() => setDetailsKey(null)}
         />
       )}
+
+      <ExportLigaModal
+        open={ligaExportOpen}
+        onClose={() => setLigaExportOpen(false)}
+        title="Repositório"
+        inventoryEntries={entries}
+      />
     </div>
   )
 }

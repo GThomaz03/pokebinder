@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ShareModal } from '../components/ShareModal'
+import { ExportLigaModal } from '../components/ExportLigaModal'
 import { useAuth } from '../hooks/useAuth'
 import { useBinders } from '../hooks/useBinders'
 import { useInventory } from '../hooks/useInventory'
@@ -67,8 +68,11 @@ export function BindersPage() {
     reorderBinders,
     progress,
   } = useBinders()
+  const { entries: inventoryEntries } = useInventory()
+  const inventoryTotal = inventoryCardCount(inventoryEntries)
   const [modal, setModal] = useState<ModalState>(null)
   const [shareTarget, setShareTarget] = useState<Binder | null>(null)
+  const [ligaExportTarget, setLigaExportTarget] = useState<Binder | null>(null)
   const [published, setPublished] = useState<PublishedResource[]>([])
   const [following, setFollowing] = useState<Profile[]>([])
   const [sharedBinders, setSharedBinders] = useState<SharedBinderRow[]>([])
@@ -116,9 +120,6 @@ export function BindersPage() {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [menuOpenId])
-
-  const { entries } = useInventory()
-  const inventoryTotal = inventoryCardCount(entries)
 
   function onRepository() {
     const binder = ensureRepository()
@@ -364,6 +365,10 @@ export function BindersPage() {
                       setMenuOpenId(null)
                       setShareTarget(b)
                     }}
+                    onExportLiga={() => {
+                      setMenuOpenId(null)
+                      setLigaExportTarget(b)
+                    }}
                     onPublish={() => {
                       setMenuOpenId(null)
                       void togglePublish(b)
@@ -438,6 +443,14 @@ export function BindersPage() {
         snapshot={shareTarget}
         onPublished={() => void refreshSocial()}
       />
+
+      <ExportLigaModal
+        open={Boolean(ligaExportTarget)}
+        onClose={() => setLigaExportTarget(null)}
+        title={ligaExportTarget?.name ?? 'Binder'}
+        binder={ligaExportTarget}
+        inventoryEntries={inventoryEntries}
+      />
     </div>
   )
 }
@@ -455,6 +468,7 @@ function SortableBinderCard({
   onMenuToggle,
   onMenuClose,
   onShare,
+  onExportLiga,
   onPublish,
   onRename,
   onDelete,
@@ -471,6 +485,7 @@ function SortableBinderCard({
   onMenuToggle: () => void
   onMenuClose: () => void
   onShare: () => void
+  onExportLiga: () => void
   onPublish: () => void
   onRename: () => void
   onDelete: () => void
@@ -514,6 +529,7 @@ function SortableBinderCard({
         onToggle={onMenuToggle}
         onClose={onMenuClose}
         onShare={onShare}
+        onExportLiga={onExportLiga}
         onPublish={onPublish}
         onRename={onRename}
         onDelete={onDelete}
@@ -545,6 +561,7 @@ function BinderCardMenu({
   onToggle,
   onClose,
   onShare,
+  onExportLiga,
   onPublish,
   onRename,
   onDelete,
@@ -556,6 +573,7 @@ function BinderCardMenu({
   onToggle: () => void
   onClose: () => void
   onShare: () => void
+  onExportLiga: () => void
   onPublish: () => void
   onRename: () => void
   onDelete: () => void
@@ -592,6 +610,9 @@ function BinderCardMenu({
         <div className="binder-menu-panel" role="menu" id={menuId}>
           <button type="button" role="menuitem" onClick={onShare}>
             Compartilhar
+          </button>
+          <button type="button" role="menuitem" onClick={onExportLiga}>
+            Exportar Liga Pokémon
           </button>
           <button type="button" role="menuitem" disabled={busy} onClick={onPublish}>
             {busy ? '…' : published ? 'Despublicar do perfil' : 'Publicar no perfil'}
