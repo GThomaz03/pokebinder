@@ -409,11 +409,6 @@ export type LigaExportStats = {
   guessed: number
 }
 
-function cachedNameReady(card: CachedCard | undefined, cardId: string): boolean {
-  if (!card?.name?.trim()) return false
-  return !looksLikeCardId(card.name, cardId)
-}
-
 /** Collect inventory keys/qty from binder slots or repository list. */
 export function collectExportEntries(
   binder?: Binder | null,
@@ -456,7 +451,7 @@ export function collectExportEntries(
  * Never calls hydrateCard or Pokémon TCG API.
  */
 export async function prepareLigaExportData(
-  lang: CardLang,
+  _lang: CardLang,
   entries: Array<{ key: string; qty: number }>,
   setInfoById?: Record<string, LigaSetInfo | undefined>,
 ): Promise<{

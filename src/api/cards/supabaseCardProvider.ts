@@ -315,21 +315,28 @@ export const supabaseCardProvider: CardProvider = {
     for (const sid of candidates) {
       const { data: row } = await supabase.from('sets').select('*').eq('source_id', sid).maybeSingle()
       if (row) {
-        data = row
+        data = row as Record<string, unknown>
         break
       }
     }
     if (!data) return null
+    const asStr = (v: unknown) => (typeof v === 'string' ? v : undefined)
+    const asNum = (v: unknown) => (typeof v === 'number' ? v : undefined)
+    const sourceId = asStr(data.source_id) ?? setId
+    const name =
+      lang === 'pt'
+        ? (asStr(data.pt_name) ?? asStr(data.name) ?? sourceId)
+        : (asStr(data.en_name) ?? asStr(data.name) ?? sourceId)
     return {
-      id: data.source_id,
-      name: lang === 'pt' ? (data.pt_name ?? data.name) : (data.en_name ?? data.name),
-      logo: data.logo_url ?? undefined,
-      symbol: data.symbol_url ?? undefined,
-      cardCount: data.total_cards ?? 0,
-      cardCountOfficial: data.official_total ?? undefined,
-      releaseDate: data.release_date ?? undefined,
-      serieName: data.serie_slug ?? undefined,
-      serieId: data.serie_slug ?? undefined,
+      id: sourceId,
+      name,
+      logo: asStr(data.logo_url),
+      symbol: asStr(data.symbol_url),
+      cardCount: asNum(data.total_cards) ?? 0,
+      cardCountOfficial: asNum(data.official_total),
+      releaseDate: asStr(data.release_date),
+      serieName: asStr(data.serie_slug),
+      serieId: asStr(data.serie_slug),
     } satisfies SetMeta
   },
 

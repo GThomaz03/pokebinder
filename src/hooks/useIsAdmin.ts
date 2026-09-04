@@ -28,7 +28,8 @@ export function useIsAdmin(): { isAdmin: boolean; loading: boolean; loggedIn: bo
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) {
+    const client = supabase
+    if (!isSupabaseConfigured || !client) {
       setLoading(false)
       return
     }
@@ -36,15 +37,15 @@ export function useIsAdmin(): { isAdmin: boolean; loading: boolean; loggedIn: bo
     ;(async () => {
       const admin = await resolveIsAdmin()
       if (!cancelled) {
-        const { data } = await supabase.auth.getUser()
+        const { data } = await client.auth.getUser()
         setLoggedIn(Boolean(data.user))
         setIsAdmin(admin)
         setLoading(false)
       }
     })()
-    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
+    const { data: sub } = client.auth.onAuthStateChange(async () => {
       const admin = await resolveIsAdmin()
-      const { data } = await supabase.auth.getUser()
+      const { data } = await client.auth.getUser()
       setLoggedIn(Boolean(data.user))
       setIsAdmin(admin)
     })
