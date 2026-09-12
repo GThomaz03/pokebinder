@@ -9,6 +9,7 @@ export function baseCardId(idOrKey: string): string {
 const CATALOG_SET_FROM_TCGDEX: Record<string, string> = {
   me01: 'me1',
   me02: 'me2',
+  'me02.5': 'me2pt5',
   me03: 'me3',
   me04: 'me4',
   me05: 'me5',

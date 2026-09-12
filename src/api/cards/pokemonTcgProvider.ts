@@ -1,4 +1,5 @@
 import type { CardLang, CardPrice } from '../../types'
+import { catalogCardIdCandidates } from '../cardKeys'
 import { API_CONFIG } from '../config'
 import { resolveDexId, resolvePokemonSearchTerms } from '../../lib/pokemonNameAliases'
 import { fetchJson, CatalogError } from './http'
@@ -229,21 +230,31 @@ export async function searchPokemonTcgCards(
   }
 }
 
+/** PokémonTCG.io ids differ from TCGdex (me02.5-232 → me2pt5-232). */
+function pokemonTcgIdCandidates(id: string): string[] {
+  const cands = catalogCardIdCandidates(id)
+  if (cands.length <= 1) return cands
+  return [...cands].reverse()
+}
+
 export async function getPokemonTcgCardById(
   lang: CardLang,
   id: string,
 ): Promise<NormalizedCard | null> {
-  const url = `${API_CONFIG.pokemonTcgIo.apiBaseUrl}/cards/${encodeURIComponent(id)}`
-  try {
-    const res = await fetchJson<PokemonTcgCardResponse>(url, {
-      timeoutMs: 12_000,
-      maxRetries: API_CONFIG.http.maxRetries,
-    })
-    if (!res.data?.id) return null
-    return mapNormalized(lang, res.data)
-  } catch {
-    return null
+  for (const cid of pokemonTcgIdCandidates(id)) {
+    const url = `${API_CONFIG.pokemonTcgIo.apiBaseUrl}/cards/${encodeURIComponent(cid)}`
+    try {
+      const res = await fetchJson<PokemonTcgCardResponse>(url, {
+        timeoutMs: 12_000,
+        maxRetries: API_CONFIG.http.maxRetries,
+      })
+      if (!res.data?.id) continue
+      return mapNormalized(lang, res.data)
+    } catch {
+      /* try next id mapping */
+    }
   }
+  return null
 }
 
 export async function fetchPokemonTcgSpeciesVariants(

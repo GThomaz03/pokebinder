@@ -3,23 +3,44 @@ import { API_CONFIG } from '../config'
 import { cardImageUrl, inferMissingImageCandidates, isLegacyCatalogImage } from '../images/imageProvider'
 import { getCachedFxRates, getFxRates, toBrl } from '../fx/fxProvider'
 import { baseCardId, catalogCardIdCandidates, parseOwnedKey } from '../cardKeys'
-import { createTcgdexPriceProvider, quoteFromPricing, extractMarkets } from './tcgdexPriceProvider'
+import {
+  createTcgdexPriceProvider,
+  quoteFromPricing,
+  extractMarkets,
+  type PricingBlock,
+} from './tcgdexPriceProvider'
 import { pokemonTcgPriceProvider } from './pokemonTcgPriceProvider'
 import type { PriceProvider, PriceQuote, PriceQuoteOptions } from './types'
 import { getCardById } from '../cards/cardRepository'
+import { fetchJson } from '../cards/http'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 
 const tcgdexPriceProvider = createTcgdexPriceProvider(async (lang, cardId) => {
-  const card = await getCardById(lang as CardLang, cardId)
-  if (!card || !isSupabaseConfigured || !supabase) return undefined
+  if (isSupabaseConfigured && supabase) {
+    for (const cid of catalogCardIdCandidates(cardId)) {
+      const { data } = await supabase
+        .from('cards')
+        .select('raw_data')
+        .eq('canonical_id', cid)
+        .maybeSingle()
+      const rd = data?.raw_data as { pricing?: PriceQuoteOptions['pricingHint'] } | undefined
+      if (rd?.pricing) return rd.pricing as PricingBlock
+    }
+  }
+
+  const langs: CardLang[] = lang === 'en' ? ['en'] : [lang as CardLang, 'en']
   for (const cid of catalogCardIdCandidates(cardId)) {
-    const { data } = await supabase
-      .from('cards')
-      .select('raw_data')
-      .eq('canonical_id', cid)
-      .maybeSingle()
-    const rd = data?.raw_data as { pricing?: PriceQuoteOptions['pricingHint'] } | undefined
-    if (rd?.pricing) return rd.pricing
+    for (const L of langs) {
+      try {
+        const card = await fetchJson<{ pricing?: PricingBlock }>(
+          `${API_CONFIG.tcgdex.baseUrl}/${L}/cards/${encodeURIComponent(cid)}`,
+          { maxRetries: 1 },
+        )
+        if (card?.pricing) return card.pricing
+      } catch {
+        /* try next lang / id */
+      }
+    }
   }
   return undefined
 })

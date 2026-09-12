@@ -167,10 +167,16 @@ export function catalogPricesFromPokemonTcg(card: PokemonTcgCardPricing | null |
   return rows
 }
 
+function pokemonTcgIdCandidates(cardId: string): string[] {
+  const cands = catalogCardIdCandidates(cardId)
+  if (cands.length <= 1) return cands
+  return [...cands].reverse()
+}
+
 export async function fetchPokemonTcgCardPricing(
   cardId: string,
 ): Promise<PokemonTcgCardPricing | null> {
-  for (const cid of catalogCardIdCandidates(cardId)) {
+  for (const cid of pokemonTcgIdCandidates(cardId)) {
     const url = `${API_CONFIG.pokemonTcgIo.apiBaseUrl}/cards/${encodeURIComponent(cid)}`
     try {
       const res = await fetchPokemonTcgJson<PokemonTcgCardResponse>(url)

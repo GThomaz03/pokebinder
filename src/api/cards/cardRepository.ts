@@ -48,10 +48,6 @@ async function ensureProvider(): Promise<CardProvider> {
   return activeProvider
 }
 
-function usingSupabaseCatalog(): boolean {
-  return catalogPopulated === true && activeProvider === supabaseCardProvider
-}
-
 function usesSupabase(provider: CardProvider) {
   return provider === supabaseCardProvider
 }
@@ -83,12 +79,9 @@ export async function getCardById(
       const card = await provider.getById(lang, id)
       if (card) return card
     } catch {
-      /* fall through only when catalog empty */
+      /* fall through to live TCGdex / PokémonTCG */
     }
-    if (usingSupabaseCatalog()) return null
   }
-
-  if (usingSupabaseCatalog()) return null
 
   if (getCachedTcgdexAvailability() === false) {
     lastCatalogSource = 'pokemontcg'
