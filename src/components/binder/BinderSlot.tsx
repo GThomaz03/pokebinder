@@ -317,7 +317,7 @@ export function BinderSlot({
             alt={cached?.name || ''}
             quality="high"
             loading="eager"
-            cardId={cardId}
+            cardId={cached?.image ? undefined : cardId}
             cardName={cached?.name}
             localId={
               cached?.localId ||

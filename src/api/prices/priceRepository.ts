@@ -1,5 +1,6 @@
 import type { CachedCard, CardLang, CardPrice, PriceMarket } from '../../types'
 import { API_CONFIG } from '../config'
+import { imageCacheKey, setCachedImageUrl } from '../imageCache'
 import { cardImageUrl, inferMissingImageCandidates, isLegacyCatalogImage } from '../images/imageProvider'
 import { getCachedFxRates, getFxRates, toBrl } from '../fx/fxProvider'
 import { baseCardId, catalogCardIdCandidates, parseOwnedKey } from '../cardKeys'
@@ -239,6 +240,11 @@ export function getCachedCard(id: string): CachedCard | undefined {
   return cardCache[baseCardId(id)] ?? cardCache[id]
 }
 
+function rememberCardImageUrl(image: string | undefined) {
+  if (!image || isLegacyCatalogImage(image)) return
+  setCachedImageUrl(imageCacheKey({ src: image, quality: 'high' }), image)
+}
+
 function isResolvedCardImageUrl(url: string): boolean {
   if (/\.(webp|png|jpg|jpeg)(\?.*)?$/i.test(url)) return true
   if (/scrydex\.com\/pokemon\//i.test(url) && /\/(large|small)$/i.test(url)) return true
@@ -465,6 +471,7 @@ export async function hydrateCard(
     }
     cardCache = { ...cardCache, [cardId]: cached }
     priceCache = { ...priceCache, [cardId]: price }
+    rememberCardImageUrl(image)
     persistCards()
     persistPrices()
     return cached
@@ -502,6 +509,7 @@ export function seedCardBrief(brief: {
     dexId: existing?.dexId,
   }
   cardCache = { ...cardCache, [id]: cached }
+  rememberCardImageUrl(image)
   if (brief.price?.updated) {
     priceCache = { ...priceCache, [brief.id]: brief.price, [id]: brief.price }
     persistPrices()

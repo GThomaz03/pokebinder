@@ -50,7 +50,10 @@ function buildCandidates(
     }
   }
 
-  if (meta?.cardId) {
+  // When hydrate already gave us a usable image base/URL, skip inferred fallbacks —
+  // they often load TCGdex card-back placeholders for newer sets (sv10.5b, me02.5, etc.).
+  const hasAuthoritativeSrc = Boolean(src && !isLegacyCatalogImage(src))
+  if (meta?.cardId && !hasAuthoritativeSrc) {
     for (const u of inferMissingImageCandidates({
       cardId: meta.cardId,
       name: meta.cardName,

@@ -4,7 +4,7 @@ import { API_CONFIG } from './config'
 import { isLegacyCatalogImage } from './images/imageProvider'
 
 const STORAGE_KEY = API_CONFIG.storageKeys.imageUrls
-const LEGACY_STORAGE_KEY = 'pokebinder-img-urls-v1'
+const LEGACY_STORAGE_KEYS = ['pokebinder-img-urls-v1', 'pokebinder-img-urls-v3']
 
 type ImageUrlMap = Record<string, string>
 
@@ -36,11 +36,13 @@ function load(): ImageUrlMap {
       return next
     }
 
-    // One-time reset: drop v1 cache that stored TCGdex card-back URLs.
-    try {
-      localStorage.removeItem(LEGACY_STORAGE_KEY)
-    } catch {
-      /* ignore */
+    // One-time reset: drop legacy caches that stored TCGdex card-back URLs.
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      try {
+        localStorage.removeItem(legacyKey)
+      } catch {
+        /* ignore */
+      }
     }
     return {}
   } catch {
@@ -68,7 +70,13 @@ export function imageCacheKey(parts: {
   cardId?: string
   quality: 'high' | 'low'
 }): string {
-  const id = parts.cardId?.trim() || parts.src?.trim() || ''
+  const src = parts.src?.trim()
+  const cardId = parts.cardId?.trim()
+  // Prefer resolved API URLs — cardId-only keys kept stale inferred URLs (often TCGdex card backs).
+  if (src && !isLegacyCatalogImage(src)) {
+    return `${src}::${parts.quality}`
+  }
+  const id = cardId || src || ''
   return `${id}::${parts.quality}`
 }
 
