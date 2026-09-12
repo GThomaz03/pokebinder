@@ -218,6 +218,22 @@ export function getCachedCard(id: string): CachedCard | undefined {
   return cardCache[baseCardId(id)] ?? cardCache[id]
 }
 
+function isResolvedCardImageUrl(url: string): boolean {
+  if (/\.(webp|png|jpg|jpeg)(\?.*)?$/i.test(url)) return true
+  if (/scrydex\.com\/pokemon\//i.test(url) && /\/(large|small)$/i.test(url)) return true
+  if (/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(url)) return true
+  return false
+}
+
+/** True when the card cache has no usable resolved image URL. */
+export function cardNeedsImageRefresh(id: string): boolean {
+  const card = getCachedCard(id)
+  if (!card) return true
+  if (!card.image) return true
+  if (isLegacyCatalogImage(card.image)) return true
+  return !isResolvedCardImageUrl(card.image)
+}
+
 export function getCachedPrice(id: string): CardPrice | undefined {
   return priceCache[id] ?? priceCache[baseCardId(id)] ?? getCachedCard(id)?.price
 }
@@ -232,13 +248,6 @@ function numPrice(v: unknown): number | undefined {
   if (v == null || v === '') return undefined
   const n = Number(v)
   return Number.isFinite(n) ? n : undefined
-}
-
-function isResolvedCardImageUrl(url: string): boolean {
-  if (/\.(webp|png|jpg|jpeg)(\?.*)?$/i.test(url)) return true
-  if (/scrydex\.com\/pokemon\//i.test(url) && /\/(large|small)$/i.test(url)) return true
-  if (/\/(high|low)\.(webp|png|jpg|jpeg)/i.test(url)) return true
-  return false
 }
 
 export async function hydrateCard(
@@ -265,7 +274,8 @@ export async function hydrateCard(
     force ||
     Date.now() - (existing?.price.updated || 0) > API_CONFIG.cache.priceStaleTimeMs
 
-  if (existing && !stale && !force && !parsed.lang && existing.image) return existing
+  const needsImage = cardNeedsImageRefresh(cardId)
+  if (existing && !stale && !force && !parsed.lang && existing.image && !needsImage) return existing
 
   try {
     const normalized = await getCardById(fetchLang, cardId)

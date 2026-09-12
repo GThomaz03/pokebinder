@@ -9,7 +9,11 @@ import {
   type CardSearchFilters,
 } from '../api/cards/cardRepository'
 import { getFxRates } from '../api/fx/fxProvider'
-import { getPriceQuote, hydrateCard } from '../api/prices/priceRepository'
+import {
+  cardNeedsImageRefresh,
+  getPriceQuote,
+  hydrateCard,
+} from '../api/prices/priceRepository'
 import type { CardLang, PriceMarket } from '../types'
 import { queryKeys } from '../lib/queryClient'
 import { parseOwnedKey } from '../api/cardKeys'
@@ -24,7 +28,11 @@ export function useCard(lang: CardLang, cardId: string | undefined, enabled = tr
     queryKey: queryKeys.card(fetchLang, id ?? ''),
     queryFn: async () => {
       if (!id) throw new Error('card id required')
-      const card = await hydrateCard(fetchLang, cardId!)
+      const card = await hydrateCard(
+        fetchLang,
+        cardId!,
+        cardNeedsImageRefresh(id),
+      )
       // Throw so React Query retries instead of caching null as success
       if (!card) throw new Error(`Card unavailable: ${id}`)
       return card

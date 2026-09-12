@@ -4,7 +4,13 @@ import { CardImage } from '../components/CardImage'
 import { Skeleton } from '../components/Skeleton'
 import { PageGrid } from '../components/binder/PageGrid'
 import { PageTurnNav } from '../components/binder/PageTurnNav'
-import { getCachedCard, getCachedPrice, hydrateCard, formatPrice } from '../api/prices'
+import {
+  cardNeedsImageRefresh,
+  getCachedCard,
+  getCachedPrice,
+  hydrateCard,
+  formatPrice,
+} from '../api/prices'
 import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { fetchShareLink, type ShareLink } from '../lib/cloudStorage'
 import { deckTotal } from '../lib/deckRules'
@@ -196,7 +202,8 @@ function SharedBinderView({ binder }: { binder: Binder }) {
     void Promise.all(
       keys.map((key) => {
         const { lang: keyLang } = parseOwnedKey(key)
-        return hydrateCard(keyLang ?? 'pt', key, Boolean(keyLang))
+        const force = Boolean(keyLang) || cardNeedsImageRefresh(baseCardId(key))
+        return hydrateCard(keyLang ?? 'pt', key, force)
       }),
     ).then(() => {
       if (!cancelled) setHydrateTick((t) => t + 1)

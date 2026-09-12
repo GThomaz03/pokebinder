@@ -4,11 +4,21 @@ import { baseCardId, catalogCardIdCandidates, normalizeCatalogCardId, normalizeC
 
 export { baseCardId }
 
+const RESOLVED_IMAGE_RE = /\.(webp|png|jpg|jpeg)(\?.*)?$/i
+const TCGDEX_QUALITY_RE = /\/(high|low)\.(webp|png|jpg|jpeg)(\?.*)?$/i
+
 /** URLs that load card backs / 404 placeholders — must not be cached or reused. */
 export function isLegacyCatalogImage(url: string | undefined | null): boolean {
   if (!url) return false
-  // Any TCGdex CDN (assets.tcgdex.net, images.tcgdex.com, …) — often card-back placeholders.
-  if (/tcgdex\.(net|com)/i.test(url)) return true
+
+  // TCGdex CDN base without quality/extension — invalid as <img src> (404).
+  // Resolved paths like …/25/high.webp are valid and must be kept.
+  if (/tcgdex\.(net|com)/i.test(url)) {
+    if (TCGDEX_QUALITY_RE.test(url)) return false
+    if (RESOLVED_IMAGE_RE.test(url)) return false
+    return true
+  }
+
   if (/images\.pokemontcg\.io\/(me0\d|sv0\d)/i.test(url)) return true
   if (/images\.pokemontcg\.io\/[^/]*\d\.\d\//i.test(url)) return true
   return false

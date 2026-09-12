@@ -4,6 +4,7 @@
  */
 export {
   cacheVariantPrice,
+  cardNeedsImageRefresh,
   ESTIMATED_BRL_HINT,
   ESTIMATED_BRL_LABEL,
   formatEstimatedBrl,

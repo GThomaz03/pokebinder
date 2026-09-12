@@ -12,7 +12,7 @@ import { useBinders } from '../hooks/useBinders'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
 import { useTray } from '../hooks/useTray'
-import { getCachedCard, hydrateCard } from '../api/prices'
+import { cardNeedsImageRefresh, getCachedCard, hydrateCard } from '../api/prices'
 import { useFxRates } from '../hooks/useCardQueries'
 import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { CardImage } from '../components/CardImage'
@@ -111,7 +111,8 @@ export function BinderViewPage() {
     void Promise.all(
       keys.slice(0, 200).map((key) => {
         const { lang: keyLang } = parseOwnedKey(key)
-        return hydrateCard(keyLang ?? lang, key, Boolean(keyLang))
+        const force = Boolean(keyLang) || cardNeedsImageRefresh(baseCardId(key))
+        return hydrateCard(keyLang ?? lang, key, force)
       }),
     ).then(() => {
       if (!cancelled) setPriceTick((t) => t + 1)
@@ -241,7 +242,8 @@ export function BinderViewPage() {
     void Promise.all(
       keys.map((key) => {
         const { lang: keyLang } = parseOwnedKey(key)
-        return hydrateCard(keyLang ?? lang, key, Boolean(keyLang))
+        const force = Boolean(keyLang) || cardNeedsImageRefresh(baseCardId(key))
+        return hydrateCard(keyLang ?? lang, key, force)
       }),
     ).then(() => {
       if (!cancelled) setPriceTick((t) => t + 1)

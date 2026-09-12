@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useCollabBinder } from '../hooks/useCollabBinder'
 import { useLanguage } from '../hooks/useLanguage'
 import { useTray } from '../hooks/useTray'
-import { getCachedCard, hydrateCard } from '../api/prices'
+import { cardNeedsImageRefresh, getCachedCard, hydrateCard } from '../api/prices'
 import { baseCardId, parseOwnedKey } from '../api/tcgdex'
 import { binderTotalBrl } from '../lib/binderUtils'
 import {
@@ -193,7 +193,8 @@ export function CollabBinderViewPage() {
     void Promise.all(
       keys.slice(0, 80).map((key) => {
         const { lang: keyLang } = parseOwnedKey(key)
-        return hydrateCard(keyLang ?? lang, key, Boolean(keyLang))
+        const force = Boolean(keyLang) || cardNeedsImageRefresh(baseCardId(key))
+        return hydrateCard(keyLang ?? lang, key, force)
       }),
     ).then(() => setPriceTick((t) => t + 1))
   }, [binder, lang])
