@@ -247,7 +247,7 @@ export function PokedexPanel({
                     onClick={() => toggleOwned(card.key)}
                     aria-pressed={owned}
                   >
-                    {card.image ? (
+                    {card.image || card.cardId ? (
                       <CardImage
                         src={card.image}
                         alt={card.name}

@@ -802,7 +802,7 @@ function SharedDeckView({ deck }: { deck: Deck }) {
                 <li key={c.cardId}>
                   <span className="qty">{c.qty}×</span>
                   {c.image ? (
-                    <img src={c.image} alt="" width={36} height={50} loading="lazy" />
+                    <CardImage src={c.image} alt="" quality="low" cardId={c.cardId} />
                   ) : (
                     <CardImage cardId={c.cardId} alt="" />
                   )}

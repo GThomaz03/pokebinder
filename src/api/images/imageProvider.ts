@@ -4,23 +4,21 @@ import { baseCardId, catalogCardIdCandidates, normalizeCatalogCardId, normalizeC
 
 export { baseCardId }
 
-const RESOLVED_IMAGE_RE = /\.(webp|png|jpg|jpeg)(\?.*)?$/i
-const TCGDEX_QUALITY_RE = /\/(high|low)\.(webp|png|jpg|jpeg)(\?.*)?$/i
-
-/** URLs that load card backs / 404 placeholders — must not be cached or reused. */
+/** URLs that load card backs or known-bad paths — must not be cached or reused. */
 export function isLegacyCatalogImage(url: string | undefined | null): boolean {
   if (!url) return false
 
-  // TCGdex CDN base without quality/extension — invalid as <img src> (404).
-  // Resolved paths like …/25/high.webp are valid and must be kept.
-  if (/tcgdex\.(net|com)/i.test(url)) {
-    if (TCGDEX_QUALITY_RE.test(url)) return false
-    if (RESOLVED_IMAGE_RE.test(url)) return false
-    return true
-  }
-
+  // PokémonTCG.io has no art for these id shapes and may 404 or substitute a back.
   if (/images\.pokemontcg\.io\/(me0\d|sv0\d)/i.test(url)) return true
   if (/images\.pokemontcg\.io\/[^/]*\d\.\d\//i.test(url)) return true
+
+  // Scrydex answers unknown ids with HTTP 200 and the Pokémon card back.
+  // `sv07-001` is that placeholder; the hosted file is the normalized `sv7-1`.
+  if (/images\.scrydex\.com\/pokemon\//i.test(url)) {
+    const id = url.split('/pokemon/')[1]?.split('/')[0] ?? ''
+    if (!id || id !== normalizeCatalogCardId(id)) return true
+  }
+
   return false
 }
 
@@ -177,7 +175,10 @@ function scrydexCandidates(url: string, quality: 'high' | 'low'): string[] {
 
 function scrydexCandidatesForCardId(cardId: string): string[] {
   const out: string[] = []
-  for (const id of catalogCardIdCandidates(cardId)) {
+  const normalized = normalizeCatalogCardId(baseCardId(cardId))
+  const ids = [normalized, ...catalogCardIdCandidates(cardId).filter((id) => id !== normalized)]
+  for (const id of ids) {
+    if (id !== normalizeCatalogCardId(id)) continue
     pushUnique(out, `https://images.scrydex.com/pokemon/${id}/large`)
     pushUnique(out, `https://images.scrydex.com/pokemon/${id}/small`)
   }
@@ -321,12 +322,6 @@ export function inferMissingImageCandidates(opts: {
   const typeKey = detectBasicEnergyTypeKey(opts.name, opts.energyType)
   const isEnergySet = ENERGY_SET_IDS.has(setId.toLowerCase()) || Boolean(typeKey)
 
-  // Newer sets (me5, etc.) — Scrydex before pokemontcg.io / TCGdex assets.
-  if (dash > 0) {
-    for (const u of scrydexCandidatesForCardId(id)) pushUnique(urls, u)
-  }
-
-  // Basic Energy: TCGdex almost never ships `image`; prefer SVE prints on PokémonTCG.io.
   if (typeKey) {
     const n = BASIC_ENERGY_SVE_INDEX[typeKey]
     if (n) {
@@ -338,7 +333,6 @@ export function inferMissingImageCandidates(opts: {
     pushPokemonTcgIo(urls, ioBase, setId, localIds)
   }
 
-  // PokémonTCG.io before TCGdex assets — TCGdex CDN often serves card-back placeholders for newer sets.
   if (dash > 0 && !isEnergySet && pokemonTcgIoSupported(catalogSetId)) {
     pushPokemonTcgIo(urls, ioBase, catalogSetId, localIds)
   }
@@ -347,13 +341,15 @@ export function inferMissingImageCandidates(opts: {
     for (const lid of localIds.length ? localIds : ['']) {
       const base = inferTcgdexImageBase(id, lang, lid || undefined)
       if (!base) continue
-      for (const u of cardImageCandidates(base, 'high')) {
-        if (!isLegacyCatalogImage(u)) pushUnique(urls, u)
-      }
       for (const u of cardImageCandidates(base, 'low')) {
         if (!isLegacyCatalogImage(u)) pushUnique(urls, u)
       }
     }
+  }
+
+  // Last: Scrydex returns HTTP 200 and the card back for ids it does not host.
+  if (dash > 0) {
+    for (const u of scrydexCandidatesForCardId(id)) pushUnique(urls, u)
   }
 
   return urls.filter((u) => !isLegacyCatalogImage(u))
