@@ -229,20 +229,22 @@ export async function createImportSources(): Promise<{
     }
   }
   if (forced === 'tcgdex' || forced === 'api') {
-    const { TcgdexApiSource, createTcgdexSources } = await import('../tcgdex/apiSource')
+    const { createTcgdexSources } = await import('../tcgdex/apiSource')
+    const langs = createTcgdexSources(['pt', 'en', 'ja'])
     return {
-      primary: new TcgdexApiSource(),
-      translations: createTcgdexSources(['pt']),
+      primary: langs.find((s) => s.lang === 'en') ?? langs[0],
+      translations: langs,
       checkpointSource: 'tcgdex',
       dataSourceName: 'tcgdex',
     }
   }
 
   if (await isTcgdexApiReachable()) {
-    const { TcgdexApiSource, createTcgdexSources } = await import('../tcgdex/apiSource')
+    const { createTcgdexSources } = await import('../tcgdex/apiSource')
+    const langs = createTcgdexSources(['pt', 'en', 'ja'])
     return {
-      primary: new TcgdexApiSource(),
-      translations: createTcgdexSources(['pt']),
+      primary: langs.find((s) => s.lang === 'en') ?? langs[0],
+      translations: langs,
       checkpointSource: 'tcgdex',
       dataSourceName: 'tcgdex',
     }

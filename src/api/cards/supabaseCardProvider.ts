@@ -1,6 +1,17 @@
 import type { CardLang } from '../../types'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
-import { catalogCardIdCandidates, baseCardId, normalizeCatalogSetId } from '../cardKeys'
+import { catalogCardIdCandidates, baseCardId } from '../cardKeys'
+import {
+  CATALOG_FETCH_PAGE_SIZE,
+  CATALOG_SEARCH_PAGE_SIZE,
+  canonicalIdLikePrefix,
+  categoryAliases,
+  compareLocalIds,
+  numberSearchVariants,
+  sanitizeSearchTerm,
+  setSourceIdCandidates,
+  typeAliases,
+} from './catalogQuery'
 import type {
   CardBrief,
   CardProvider,
@@ -92,17 +103,32 @@ function mapBrief(row: DbCard, lang: CardLang, tr?: { name: string } | null): Ca
 }
 
 async function fetchTranslation(cardIds: string[], lang: CardLang) {
+  const out = new Map<string, { name: string }>()
+  if (!supabase || !cardIds.length) return out
+  for (let i = 0; i < cardIds.length; i += BATCH_CHUNK) {
+    const chunk = await fetchTranslationChunk(cardIds.slice(i, i + BATCH_CHUNK), lang)
+    for (const [id, value] of chunk) out.set(id, value)
+  }
+  return out
+}
+
+async function fetchTranslationChunk(cardIds: string[], lang: CardLang) {
   if (!supabase || !cardIds.length) return new Map<string, { name: string }>()
   const dbLang = langToDb(lang)
-  const { data: cards } = await supabase.from('cards').select('id, canonical_id').in('canonical_id', cardIds)
+  const { data: cards, error } = await supabase
+    .from('cards')
+    .select('id, canonical_id')
+    .in('canonical_id', cardIds)
+  if (error) throw new Error(error.message)
   const idByCanonical = new Map((cards ?? []).map((c) => [c.canonical_id, c.id]))
   const uuids = [...idByCanonical.values()]
-  if (!uuids.length) return new Map()
-  const { data: trs } = await supabase
+  if (!uuids.length) return new Map<string, { name: string }>()
+  const { data: trs, error: trError } = await supabase
     .from('card_translations')
     .select('card_id, name')
     .in('card_id', uuids)
     .eq('language', dbLang)
+  if (trError) throw new Error(trError.message)
   const byUuid = new Map((trs ?? []).map((t) => [t.card_id, t]))
   const out = new Map<string, { name: string }>()
   for (const [canonical, uuid] of idByCanonical) {
@@ -129,7 +155,7 @@ export async function fetchCardsByIds(
   const result = new Map<string, NormalizedCard>()
   if (!supabase || !ids.length) return result
 
-  const requestedIds = [...new Set(ids.map((id) => baseCardId(id).toLowerCase()))]
+  const requestedIds = [...new Set(ids.map((id) => baseCardId(id)))]
   const candidatesByRequested = new Map<string, string[]>()
   const allCandidates = new Set<string>()
 
@@ -164,7 +190,7 @@ export async function fetchCardsByIds(
     for (const cid of candidatesByRequested.get(reqId) ?? []) {
       const hit = canonicalToCard.get(cid)
       if (hit) {
-        result.set(reqId, reqId !== hit.id ? { ...hit, id: reqId } : hit)
+        result.set(reqId, hit)
         break
       }
     }
@@ -173,20 +199,173 @@ export async function fetchCardsByIds(
   return result
 }
 
+type DbSet = {
+  id: string
+  source_id: string
+  name: string
+  pt_name: string | null
+  en_name: string | null
+  logo_url: string | null
+  symbol_url: string | null
+  total_cards: number | null
+  official_total: number | null
+  release_date: string | null
+  serie_slug: string | null
+}
+
+const SET_SELECT =
+  'id, source_id, name, pt_name, en_name, logo_url, symbol_url, total_cards, official_total, release_date, serie_slug'
+
+const SEARCH_SELECT = `
+  canonical_id, name, name_pt, name_en, name_ja, number,
+  image_low_url, image_high_url, image_url, set_source_id, set_name,
+  category, types, stage, rarity, trainer_type, energy_type, regulation_mark, hp
+`
+
+type SearchRow = {
+  canonical_id: string
+  name: string
+  name_pt: string | null
+  name_en: string | null
+  name_ja: string | null
+  number: string | null
+  image_low_url: string | null
+  image_high_url: string | null
+  image_url: string | null
+  set_source_id: string | null
+  set_name: string | null
+  category: string | null
+  types: string[] | null
+  stage: string | null
+  rarity: string | null
+  trainer_type: string | null
+  energy_type: string | null
+  regulation_mark: string | null
+  hp: number | null
+}
+
+function setDisplayName(row: DbSet, lang: CardLang): string {
+  if (lang === 'pt') return row.pt_name ?? row.name
+  return row.en_name ?? row.name
+}
+
+function mapSetMeta(row: DbSet, lang: CardLang): SetMeta {
+  return {
+    id: row.source_id,
+    name: setDisplayName(row, lang),
+    logo: row.logo_url ?? undefined,
+    symbol: row.symbol_url ?? undefined,
+    cardCount: row.total_cards ?? 0,
+    cardCountOfficial: row.official_total ?? undefined,
+    releaseDate: row.release_date ?? undefined,
+    serieName: row.serie_slug ?? undefined,
+    serieId: row.serie_slug ?? undefined,
+  }
+}
+
+function searchDisplayName(row: SearchRow, lang: CardLang): string {
+  if (lang === 'pt') return row.name_pt || row.name
+  if (lang === 'ja') return row.name_ja || row.name
+  return row.name_en || row.name
+}
+
+function mapSearchHit(row: SearchRow, lang: CardLang): DeckSearchHit {
+  return {
+    id: row.canonical_id,
+    name: searchDisplayName(row, lang),
+    localId: row.number ?? '',
+    image: row.image_low_url ?? row.image_high_url ?? row.image_url ?? undefined,
+    setId: row.set_source_id ?? undefined,
+    category: row.category ?? undefined,
+    types: row.types ?? undefined,
+    stage: row.stage ?? undefined,
+    rarity: row.rarity ?? undefined,
+    setName: row.set_name ?? undefined,
+    trainerType: row.trainer_type ?? undefined,
+    energyType: row.energy_type ?? undefined,
+    regulationMark: row.regulation_mark ?? undefined,
+    hp: row.hp ?? undefined,
+  }
+}
+
+async function fetchAllSets(): Promise<DbSet[]> {
+  if (!supabase) return []
+  const all: DbSet[] = []
+  for (let from = 0; ; from += CATALOG_FETCH_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('sets')
+      .select(SET_SELECT)
+      .order('release_date', { ascending: false, nullsFirst: false })
+      .order('source_id', { ascending: true })
+      .range(from, from + CATALOG_FETCH_PAGE_SIZE - 1)
+    if (error) throw new Error(error.message)
+    const rows = (data ?? []) as DbSet[]
+    all.push(...rows)
+    if (rows.length < CATALOG_FETCH_PAGE_SIZE) return all
+  }
+}
+
+async function findSetRow(setId: string): Promise<DbSet | null> {
+  if (!supabase) return null
+  for (const candidate of setSourceIdCandidates(setId)) {
+    const { data, error } = await supabase
+      .from('sets')
+      .select(SET_SELECT)
+      .eq('source_id', candidate)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    if (data) return data as DbSet
+  }
+  return null
+}
+
+async function querySearchView(
+  lang: CardLang,
+  opts: { text?: string; numbers?: string[]; category?: string; type?: string },
+  page: number,
+  pageSize: number,
+): Promise<DeckSearchHit[]> {
+  if (!supabase) return []
+  const from = (page - 1) * pageSize
+  let builder = supabase.from('catalog_cards_search').select(SEARCH_SELECT)
+  if (opts.numbers?.length) {
+    const clauses = opts.numbers.flatMap((n) => [`number.eq.${n}`, `canonical_id.ilike.%-${n}`])
+    builder = builder.or(clauses.join(','))
+  } else if (opts.text) {
+    const safe = opts.text
+    builder = builder.or(
+      `name.ilike.%${safe}%,name_pt.ilike.%${safe}%,name_en.ilike.%${safe}%,name_ja.ilike.%${safe}%,canonical_id.ilike.%${safe}%`,
+    )
+  }
+  if (opts.category) builder = builder.in('category', categoryAliases(opts.category))
+  if (opts.type) builder = builder.overlaps('types', typeAliases(opts.type))
+
+  const { data, error } = await builder
+    .order('canonical_id', { ascending: true })
+    .range(from, from + pageSize - 1)
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as SearchRow[]).map((row) => mapSearchHit(row, lang))
+}
+
+/** One round trip per page of sets. Used by the collection browser. */
+export async function listSupabaseSetMetas(lang: CardLang): Promise<SetMeta[]> {
+  const rows = await fetchAllSets()
+  return rows.map((row) => mapSetMeta(row, lang))
+}
+
 export const supabaseCardProvider: CardProvider = {
   async getById(lang, id) {
     if (!supabase) return null
-    const preferredId = baseCardId(id).toLowerCase()
     for (const cid of catalogCardIdCandidates(id)) {
       const { data, error } = await supabase
         .from('cards')
         .select(CARD_SELECT)
         .eq('canonical_id', cid)
         .maybeSingle()
-      if (error || !data) continue
+      if (error) throw new Error(error.message)
+      if (!data) continue
       const trs = await fetchTranslation([data.canonical_id], lang)
-      const card = mapCard(asDbCard(data), lang, trs.get(data.canonical_id))
-      return preferredId !== data.canonical_id ? { ...card, id: preferredId } : card
+      return mapCard(asDbCard(data), lang, trs.get(data.canonical_id))
     }
     return null
   },
@@ -196,198 +375,130 @@ export const supabaseCardProvider: CardProvider = {
     const q = query.trim()
     if (!q) return []
 
-    const pageSize = 40
-    const from = (page - 1) * pageSize
-    const cardIdMatch = /^([a-z0-9.]+)-(\d+[a-zA-Z]?)$/i.exec(q.replace(/\s+/g, ''))
-
-    if (cardIdMatch) {
-      const rawId = q.replace(/\s+/g, '').toLowerCase()
-      for (const cid of catalogCardIdCandidates(rawId)) {
-        const { data } = await supabase
+    const compact = q.replace(/\s+/g, '')
+    if (/^([a-z0-9.]+)-(\d+[a-zA-Z]?)$/i.test(compact)) {
+      if (page > 1) return []
+      for (const cid of catalogCardIdCandidates(compact)) {
+        const { data, error } = await supabase
           .from('cards')
           .select(CARD_SELECT)
           .eq('canonical_id', cid)
           .limit(1)
+        if (error) throw new Error(error.message)
         if (data?.length) {
           const trs = await fetchTranslation([data[0].canonical_id], lang)
-          const brief = mapBrief(asDbCard(data[0]), lang, trs.get(data[0].canonical_id))
-          return [{ ...brief, id: rawId !== data[0].canonical_id ? rawId : brief.id }]
+          return [mapBrief(asDbCard(data[0]), lang, trs.get(data[0].canonical_id))]
         }
       }
     }
 
-    const numOnly = /^\d+[a-zA-Z]?$/.test(q.replace(/^#/, '')) ? q.replace(/^#/, '') : null
-
-    let builder = supabase.from('cards').select(CARD_SELECT)
-
-    if (numOnly) {
-      builder = builder.or(`number.eq.${numOnly},canonical_id.ilike.%-${numOnly}`)
-    } else {
-      builder = builder.or(`name.ilike.%${q}%,canonical_id.ilike.%${q}%`)
+    const numbers = numberSearchVariants(q)
+    if (numbers.length) {
+      return querySearchView(lang, { numbers }, page, CATALOG_SEARCH_PAGE_SIZE)
     }
 
-    const { data, error } = await builder.range(from, from + pageSize - 1)
-    if (error || !data?.length) {
-      const dbLang = langToDb(lang)
-      const { data: trRows } = await supabase
-        .from('card_translations')
-        .select('name, cards!inner(canonical_id, number, image_low_url, image_high_url, image_url, sets(source_id))')
-        .eq('language', dbLang)
-        .ilike('name', `%${q}%`)
-        .limit(pageSize)
-      if (!trRows?.length) return []
-      return trRows.map((row) => {
-        const c = row.cards as unknown as DbCard
-        return mapBrief(c, lang, { name: row.name })
-      })
-    }
-
-    const ids = data.map((d) => d.canonical_id)
-    const trs = await fetchTranslation(ids, lang)
-    return data.map((d) => mapBrief(asDbCard(d), lang, trs.get(d.canonical_id)))
+    const safe = sanitizeSearchTerm(q)
+    if (!safe) return []
+    return querySearchView(lang, { text: safe }, page, CATALOG_SEARCH_PAGE_SIZE)
   },
 
   async searchAdvanced(lang, filters) {
     if (!supabase) return []
     const page = filters.page ?? 1
     const pageSize = filters.pageSize ?? 48
-    const from = (page - 1) * pageSize
-
-    let builder = supabase.from('cards').select(CARD_SELECT)
-    if (filters.name?.trim()) {
-      builder = builder.ilike('name', `%${filters.name.trim()}%`)
-    }
-    if (filters.category) {
-      const catMap: Record<string, string> = {
-        Pokemon: 'Pokémon',
-        Trainer: 'Treinador',
-        Energy: 'Energia',
-      }
-      const cat = lang === 'pt' ? (catMap[filters.category] ?? filters.category) : filters.category
-      builder = builder.eq('category', cat)
-    }
-    if (filters.type) {
-      builder = builder.contains('types', [filters.type])
-    }
-
-    const { data } = await builder.range(from, from + pageSize - 1)
-    if (!data?.length) return []
-
-    const trs = await fetchTranslation(
-      data.map((d) => d.canonical_id),
+    const rawName = filters.name?.trim() ?? ''
+    const numbers = rawName ? numberSearchVariants(rawName) : []
+    const text = rawName && !numbers.length ? sanitizeSearchTerm(rawName) : undefined
+    if (rawName && !numbers.length && !text) return []
+    return querySearchView(
       lang,
+      {
+        text,
+        numbers: numbers.length ? numbers : undefined,
+        category: filters.category || undefined,
+        type: filters.type || undefined,
+      },
+      page,
+      pageSize,
     )
-    return data.map((d) => {
-      const row = asDbCard(d)
-      const brief = mapBrief(row, lang, trs.get(row.canonical_id))
-      return {
-        ...brief,
-        category: row.category ?? undefined,
-        types: row.types ?? undefined,
-        stage: row.stage ?? undefined,
-        rarity: row.rarity ?? undefined,
-        setName: row.sets?.name,
-        setId: row.sets?.source_id,
-        trainerType: row.trainer_type ?? undefined,
-        energyType: row.energy_type ?? undefined,
-        regulationMark: row.regulation_mark ?? undefined,
-        hp: row.hp ?? undefined,
-      } satisfies DeckSearchHit
-    })
   },
 
   async listSets(lang) {
-    if (!supabase) return []
-    const { data } = await supabase
-      .from('sets')
-      .select('source_id, name, pt_name, en_name')
-      .order('release_date', { ascending: false, nullsFirst: false })
-    return (data ?? []).map((s) => ({
-      id: s.source_id,
-      name: lang === 'pt' ? (s.pt_name ?? s.name) : (s.en_name ?? s.name),
-    }))
+    const rows = await fetchAllSets()
+    return rows.map((row) => ({ id: row.source_id, name: setDisplayName(row, lang) }))
   },
 
   async getSet(lang, setId) {
-    if (!supabase) return null
-    const candidates = [...new Set([setId, normalizeCatalogSetId(setId)].map((s) => s.toLowerCase()))]
-    let data: Record<string, unknown> | null = null
-    for (const sid of candidates) {
-      const { data: row } = await supabase.from('sets').select('*').eq('source_id', sid).maybeSingle()
-      if (row) {
-        data = row as Record<string, unknown>
-        break
-      }
-    }
-    if (!data) return null
-    const asStr = (v: unknown) => (typeof v === 'string' ? v : undefined)
-    const asNum = (v: unknown) => (typeof v === 'number' ? v : undefined)
-    const sourceId = asStr(data.source_id) ?? setId
-    const name =
-      lang === 'pt'
-        ? (asStr(data.pt_name) ?? asStr(data.name) ?? sourceId)
-        : (asStr(data.en_name) ?? asStr(data.name) ?? sourceId)
-    return {
-      id: sourceId,
-      name,
-      logo: asStr(data.logo_url),
-      symbol: asStr(data.symbol_url),
-      cardCount: asNum(data.total_cards) ?? 0,
-      cardCountOfficial: asNum(data.official_total),
-      releaseDate: asStr(data.release_date),
-      serieName: asStr(data.serie_slug),
-      serieId: asStr(data.serie_slug),
-    } satisfies SetMeta
+    const row = await findSetRow(setId)
+    return row ? mapSetMeta(row, lang) : null
   },
 
   async listSetCards(lang, setId) {
     if (!supabase) return []
-    const sid = normalizeCatalogSetId(setId)
-    const { data: setRow } = await supabase
-      .from('sets')
-      .select('id')
-      .in('source_id', [...new Set([setId, sid])])
-      .maybeSingle()
+    const setRow = await findSetRow(setId)
     if (!setRow) return []
 
-    const { data } = await supabase
-      .from('cards')
-      .select('canonical_id, name, number, image_low_url, image_high_url, image_url')
-      .eq('set_id', setRow.id)
-      .order('number')
+    const pattern = canonicalIdLikePrefix(setRow.source_id)
+    const rows: DbCard[] = []
+    for (let from = 0; ; from += CATALOG_FETCH_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from('cards')
+        .select('canonical_id, name, number, image_low_url, image_high_url, image_url')
+        .like('canonical_id', pattern)
+        .order('canonical_id', { ascending: true })
+        .range(from, from + CATALOG_FETCH_PAGE_SIZE - 1)
+      if (error) throw new Error(error.message)
+      const pageRows = (data ?? []).map(asDbCard)
+      rows.push(...pageRows)
+      if (pageRows.length < CATALOG_FETCH_PAGE_SIZE) break
+    }
 
-    const ids = (data ?? []).map((c) => c.canonical_id)
-    const trs = await fetchTranslation(ids, lang)
-
-    return (data ?? []).map(
-      (c): SetCardBrief => ({
-        id: c.canonical_id,
-        name: trs.get(c.canonical_id)?.name ?? c.name,
-        localId: c.number ?? '',
-        image: c.image_low_url ?? c.image_high_url ?? c.image_url ?? undefined,
-        setId,
-      }),
+    const trs = await fetchTranslation(
+      rows.map((row) => row.canonical_id),
+      lang,
     )
+    return rows
+      .map(
+        (row): SetCardBrief => ({
+          id: row.canonical_id,
+          name: trs.get(row.canonical_id)?.name ?? row.name,
+          localId: row.number ?? '',
+          image: row.image_low_url ?? row.image_high_url ?? row.image_url ?? undefined,
+          setId: setRow.source_id,
+        }),
+      )
+      .sort((a, b) => compareLocalIds(a.localId, b.localId) || a.id.localeCompare(b.id))
   },
 
   async fetchSpeciesVariants(lang, dexId, speciesName) {
     if (!supabase) return []
-    const { data: cards } = await supabase
-      .from('cards')
-      .select(CARD_SELECT)
-      .contains('national_pokedex_numbers', [dexId])
-      .limit(80)
-
-    if (!cards?.length) {
-      const { data: byName } = await supabase
+    const rows: DbCard[] = []
+    for (let from = 0; ; from += CATALOG_FETCH_PAGE_SIZE) {
+      const { data, error } = await supabase
         .from('cards')
         .select(CARD_SELECT)
-        .ilike('name', `%${speciesName.split(' ')[0]}%`)
-        .limit(40)
-      if (!byName?.length) return []
-      return mapVariants(byName.map(asDbCard), lang)
+        .contains('national_pokedex_numbers', [dexId])
+        .order('canonical_id', { ascending: true })
+        .range(from, from + CATALOG_FETCH_PAGE_SIZE - 1)
+      if (error) throw new Error(error.message)
+      const pageRows = (data ?? []).map(asDbCard)
+      rows.push(...pageRows)
+      if (pageRows.length < CATALOG_FETCH_PAGE_SIZE) break
     }
-    return mapVariants(cards.map(asDbCard), lang)
+
+    if (rows.length) return mapVariants(rows, lang)
+
+    const token = speciesName.split(' ')[0]?.trim()
+    if (!token) return []
+    const { data: byName, error: nameError } = await supabase
+      .from('cards')
+      .select(CARD_SELECT)
+      .ilike('name', `%${sanitizeSearchTerm(token)}%`)
+      .order('canonical_id', { ascending: true })
+      .limit(CATALOG_FETCH_PAGE_SIZE)
+    if (nameError) throw new Error(nameError.message)
+    if (!byName?.length) return []
+    return mapVariants(byName.map(asDbCard), lang)
   },
 
   async fetchDeckCardMeta(lang, cardId) {
@@ -457,20 +568,37 @@ async function mapVariants(cards: DbCard[], lang: CardLang): Promise<CardVariant
   const ids = cards.map((c) => c.canonical_id)
   const trs = await fetchTranslation(ids, lang)
 
-  const { data: cardRows } = await supabase.from('cards').select('id, canonical_id').in('canonical_id', ids)
-  const uuidByCanonical = new Map((cardRows ?? []).map((c) => [c.canonical_id, c.id]))
-  const uuids = [...uuidByCanonical.values()]
-  const { data: allVariants } = uuids.length
-    ? await supabase.from('card_variants').select('card_id, variant_type').in('card_id', uuids)
-    : { data: [] }
+  const uuidByCanonical = new Map<string, string>()
+  const canonicalByUuid = new Map<string, string>()
+  for (let i = 0; i < ids.length; i += BATCH_CHUNK) {
+    const chunk = ids.slice(i, i + BATCH_CHUNK)
+    const { data: cardRows, error } = await supabase
+      .from('cards')
+      .select('id, canonical_id')
+      .in('canonical_id', chunk)
+    if (error) throw new Error(error.message)
+    for (const row of cardRows ?? []) {
+      uuidByCanonical.set(row.canonical_id, row.id)
+      canonicalByUuid.set(row.id, row.canonical_id)
+    }
+  }
 
   const variantsByCard = new Map<string, string[]>()
-  for (const v of allVariants ?? []) {
-    const canonical = [...uuidByCanonical.entries()].find(([, u]) => u === v.card_id)?.[0]
-    if (!canonical) continue
-    const list = variantsByCard.get(canonical) ?? []
-    list.push(v.variant_type)
-    variantsByCard.set(canonical, list)
+  const uuids = [...uuidByCanonical.values()]
+  for (let i = 0; i < uuids.length; i += BATCH_CHUNK) {
+    const chunk = uuids.slice(i, i + BATCH_CHUNK)
+    const { data: allVariants, error } = await supabase
+      .from('card_variants')
+      .select('card_id, variant_type')
+      .in('card_id', chunk)
+    if (error) throw new Error(error.message)
+    for (const variant of allVariants ?? []) {
+      const canonical = canonicalByUuid.get(variant.card_id)
+      if (!canonical) continue
+      const list = variantsByCard.get(canonical) ?? []
+      list.push(variant.variant_type)
+      variantsByCard.set(canonical, list)
+    }
   }
 
   const out: CardVariant[] = []

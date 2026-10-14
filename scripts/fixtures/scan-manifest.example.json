@@ -1,0 +1,9 @@
+{
+  "cases": [
+    {
+      "file": "photos/exemplo.jpg",
+      "expectedId": "substitua-pelo-canonical_id",
+      "notes": "Descreva enquadramento, luz e idioma. Apague esta linha de exemplo antes de medir."
+    }
+  ]
+}

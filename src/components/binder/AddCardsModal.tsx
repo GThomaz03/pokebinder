@@ -4,6 +4,7 @@ import {
   searchCardsRepo,
   type CatalogSource,
 } from '../../api/cards/cardRepository'
+import { CATALOG_SEARCH_PAGE_SIZE } from '../../api/cards/catalogQuery'
 import { hydrateCard, seedCardBrief } from '../../api/prices'
 import { CardImage } from '../CardImage'
 import { CardSkeletonGrid } from '../Skeleton'
@@ -65,6 +66,8 @@ export function AddCardsModal({
   /** Quantities for inventory mode — default 1 per selected card. */
   const [qtyById, setQtyById] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [catalogSource, setCatalogSource] = useState<CatalogSource | null>(
     () => lastSearch?.source ?? null,
@@ -78,16 +81,19 @@ export function AddCardsModal({
     ? selected.reduce((sum, c) => sum + (qtyById[c.id] ?? 1), 0)
     : selected.length
 
-  async function runSearch(nextQuery: string, nextLang: CardLang) {
+  async function runSearch(nextQuery: string, nextLang: CardLang, nextPage = 1) {
     const q = nextQuery.trim()
     if (!q) {
       setResults([])
       setSearchError(null)
       setCatalogSource(null)
+      setHasMore(false)
+      setPage(1)
       return
     }
 
     if (
+      nextPage === 1 &&
       lastSearch &&
       lastSearch.lang === nextLang &&
       lastSearch.query === q &&
@@ -95,6 +101,8 @@ export function AddCardsModal({
     ) {
       setResults(lastSearch.results)
       setCatalogSource(lastSearch.source)
+      setHasMore(lastSearch.results.length >= CATALOG_SEARCH_PAGE_SIZE)
+      setPage(1)
       setSearchError(null)
       return
     }
@@ -103,22 +111,31 @@ export function AddCardsModal({
     setLoading(true)
     setSearchError(null)
     try {
-      const data = (await searchCardsRepo(nextLang, q)) as Brief[]
+      const data = (await searchCardsRepo(nextLang, q, nextPage)) as Brief[]
       if (id !== reqId.current) return
       const source = getLastCatalogSource()
       for (const card of data) seedCardBrief(card)
-      setResults(data)
+      setResults((prev) => {
+        const base = nextPage === 1 ? [] : prev
+        const seen = new Set(base.map((card) => card.id))
+        return [...base, ...data.filter((card) => !seen.has(card.id))]
+      })
       setCatalogSource(source)
-      lastSearch = { lang: nextLang, query: q, results: data, source }
-      if (data.length === 0 && source === 'pokemontcg') {
+      setPage(nextPage)
+      setHasMore(data.length >= CATALOG_SEARCH_PAGE_SIZE)
+      if (nextPage === 1) {
+        lastSearch = { lang: nextLang, query: q, results: data, source }
+      }
+      if (data.length === 0 && nextPage === 1 && source === 'pokemontcg') {
         setSearchError('Nenhuma carta encontrada no catálogo temporário. Tente outro termo.')
       } else {
         setSearchError(null)
       }
     } catch {
       if (id !== reqId.current) return
-      setResults([])
+      if (nextPage === 1) setResults([])
       setCatalogSource(null)
+      setHasMore(false)
       setSearchError('Catálogo indisponível no momento. Tente novamente.')
     } finally {
       if (id === reqId.current) setLoading(false)
@@ -313,6 +330,16 @@ export function AddCardsModal({
                 )
               })}
             </div>
+            {hasMore && (
+              <button
+                type="button"
+                className="load-more"
+                disabled={loading}
+                onClick={() => void runSearch(query, lang, page + 1)}
+              >
+                {loading ? 'Buscando…' : 'Carregar mais'}
+              </button>
+            )}
           </div>
 
           <aside className="selected-panel">

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthModal } from './components/AuthModal'
 import { Layout } from './components/Layout'
@@ -25,6 +26,10 @@ import { AdminDataPage } from './pages/admin/AdminData'
 import { AdminDataHealthPage } from './pages/admin/AdminDataHealth'
 import { SharedViewPage } from './pages/SharedView'
 
+const CardScannerPage = lazy(() =>
+  import('./pages/CardScanner').then((mod) => ({ default: mod.CardScannerPage })),
+)
+
 export default function App() {
   return (
     <AuthProvider>
@@ -43,7 +48,14 @@ export default function App() {
                         <Route path="collab/join/:token" element={<CollabJoinPage />} />
                         <Route path="collab/:id" element={<CollabBinderViewPage />} />
                         <Route path="repository" element={<RepositoryPage />} />
-                        <Route path="repository/scan" element={<Navigate to="/repository" replace />} />
+                        <Route
+                          path="repository/scan"
+                          element={
+                            <Suspense fallback={<p style={{ padding: '1.5rem' }}>Abrindo scanner…</p>}>
+                              <CardScannerPage />
+                            </Suspense>
+                          }
+                        />
                         <Route path="pesquisa" element={<BrowsePage />} />
                         <Route path="pesquisa/:setId" element={<BrowseSetPage />} />
                         <Route path="calculadora" element={<DealCalculatorPage />} />

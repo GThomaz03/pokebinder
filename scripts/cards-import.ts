@@ -19,7 +19,7 @@ function parseArgs() {
     source?: string
   } = {}
   for (const a of args) {
-    if (a.startsWith('--set=')) opts.setIds = [a.slice(6)]
+    if (a.startsWith('--set=')) opts.setIds = a.slice(6).split(',').map((id) => id.trim()).filter(Boolean)
     else if (a.startsWith('--serie=')) opts.serieIds = [a.slice(8)]
     else if (a.startsWith('--limit=')) opts.limitSets = Number(a.slice(8))
     else if (a.startsWith('--source=')) opts.source = a.slice(9)
@@ -56,7 +56,7 @@ async function main() {
     setIds,
     serieIds,
     limitSets,
-    langs: importSources.translations.length ? ['en', 'pt'] : ['en'],
+    langs: importSources.translations.length ? ['pt', 'en', 'ja'] : ['en'],
     skipCompleted: !full,
   })
 

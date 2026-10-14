@@ -176,14 +176,19 @@ export function RepositoryPage() {
             automaticamente com pelo menos 1.
           </p>
         </div>
-        <button
-          type="button"
-          className="repo-export-liga"
-          disabled={entries.length === 0}
-          onClick={() => setLigaExportOpen(true)}
-        >
-          Exportar Liga Pokémon
-        </button>
+        <div className="repo-head-actions">
+          <Link to="/repository/scan" className="repo-export-liga">
+            Escanear cartas
+          </Link>
+          <button
+            type="button"
+            className="repo-export-liga"
+            disabled={entries.length === 0}
+            onClick={() => setLigaExportOpen(true)}
+          >
+            Exportar Liga Pokémon
+          </button>
+        </div>
       </header>
 
       <section className="set-progress">

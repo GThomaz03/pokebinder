@@ -53,12 +53,17 @@ export function normalizeCatalogCardId(id: string): string {
   return `${setId}-${num}`
 }
 
-/** Lookup ids to try against Supabase / PokémonTCG.io (original + normalized). */
+/**
+ * Lookup ids to try against Supabase / PokémonTCG.io.
+ * Original case comes first: TCGdex uses case to distinguish sets (`SM12` ≠ `sm12`).
+ * Lowercase and de-padded forms are fallbacks (`sv01-001` → `sv1-1`).
+ */
 export function catalogCardIdCandidates(id: string): string[] {
-  const base = baseCardId(id).toLowerCase()
-  const normalized = normalizeCatalogCardId(base)
+  const base = baseCardId(id)
+  const lower = base.toLowerCase()
+  const normalized = normalizeCatalogCardId(lower)
   const out: string[] = []
-  for (const cid of [base, normalized]) {
+  for (const cid of [base, lower, normalized]) {
     if (cid && !out.includes(cid)) out.push(cid)
   }
   return out

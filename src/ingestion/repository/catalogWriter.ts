@@ -167,6 +167,7 @@ export class CatalogWriter {
   private async ensureSet(setSourceId: string): Promise<string | null> {
     const key = `tcgdex:${setSourceId}`
     if (this.setCache.has(key)) return this.setCache.get(key)!
+    // Case-sensitive on purpose: TCGdex ids `sm12` and `SM12` are different sets.
     const { data } = await this.db
       .from('sets')
       .select('id')

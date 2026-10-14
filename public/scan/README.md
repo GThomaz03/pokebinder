@@ -1,37 +1,7 @@
-# Card scanner assets (visual ID)
+# Scanner
 
-## How it works
+O scanner ativo está em `src/lib/scanner` e na rota `/repository/scan`.
 
-1. Camera crop of the card
-2. **MobileCLIP-S2** embedding (same model in browser worker + offline script)
-3. Cosine kNN against `embeddings.bin`
-4. Optional OCR only for close top-2 ties
-5. Hydrate card via TCGdex → add to repository
+Ele não usa mais `embeddings.bin`, MobileCLIP nem YOLO. A descrição do pipeline, do índice opcional e do custo está em `docs/scanner.md`.
 
-## Commands
-
-```bash
-# Prefetch ONNX weights into public/scan/models
-npm run scan:models
-
-# Build embeddings for Scarlet/Violet + Mega Evolution sets
-npm run scan:embeddings -- --sets sv-me
-
-# Or specific sets / full catalog
-npm run scan:embeddings -- --sets me01,me02,sv08
-npm run scan:embeddings -- --sets all
-
-# Set abbreviation / size index (OCR fallback)
-npm run scan:set-index
-```
-
-## Files
-
-| File | Role |
-|------|------|
-| `embeddings.json` / `embeddings.bin` | Card metadata + Float32 vectors |
-| `set-index.json` | Abbr / official count → setId |
-| `models/mobileclip-s2-*.onnx` | Optional local ONNX copy |
-| `models/yolo11n-card.onnx` | Optional detector |
-
-Current index was built with `Xenova/mobileclip_s2` (512-d). Rebuild after changing the model.
+`set-index.json` não faz parte do reconhecimento. O catálogo TCGdex ainda o consulta para achar coleções pelo total oficial (`src/api/tcgdex.ts`). Gere de novo com `npm run scan:set-index` se esse arquivo for apagado.

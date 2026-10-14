@@ -1,4 +1,5 @@
 import type { CardLang } from '../../types'
+import { baseCardId } from '../cardKeys'
 import type {
   CardBrief,
   CardProvider,
@@ -15,6 +16,7 @@ import {
   supabaseCardProvider,
   isCatalogPopulated,
   fetchCardsByIds,
+  listSupabaseSetMetas,
 } from './supabaseCardProvider'
 import { isTcgdexAvailable, getCachedTcgdexAvailability } from './tcgdexHealth'
 import { getPokemonTcgCardById, searchPokemonTcgCards } from './pokemonTcgProvider'
@@ -57,7 +59,7 @@ export async function getCardsByIdsRepo(
   lang: CardLang,
   ids: string[],
 ): Promise<Map<string, NormalizedCard>> {
-  const unique = [...new Set(ids.filter(Boolean).map((id) => id.toLowerCase()))]
+  const unique = [...new Set(ids.filter(Boolean).map((id) => baseCardId(id)))]
   if (!unique.length) return new Map()
 
   const provider = await ensureProvider()
@@ -120,13 +122,7 @@ export async function searchCardsRepo(
   const provider = await ensureProvider()
   if (usesSupabase(provider)) {
     lastCatalogSource = 'supabase'
-    try {
-      const rows = await provider.search(lang, query, page)
-      if (rows.length) return rows
-    } catch {
-      /* external fallback below only if empty catalog path */
-    }
-    if (catalogPopulated) return []
+    return provider.search(lang, query, page)
   }
 
   if (getCachedTcgdexAvailability() === false) {
@@ -165,11 +161,7 @@ export async function searchCardsAdvancedRepo(
   filters: CardSearchFilters,
 ): Promise<DeckSearchHit[]> {
   const provider = await ensureProvider()
-  try {
-    return await provider.searchAdvanced(lang, filters)
-  } catch {
-    return []
-  }
+  return provider.searchAdvanced(lang, filters)
 }
 
 export async function listSetsRepo(lang: CardLang) {
@@ -186,11 +178,7 @@ export async function getSetMetaRepo(
   setId: string,
 ): Promise<SetMeta | null> {
   const provider = await ensureProvider()
-  try {
-    return await provider.getSet(lang, setId)
-  } catch {
-    return null
-  }
+  return provider.getSet(lang, setId)
 }
 
 const setMetaCache = new Map<string, SetMeta | null>()
@@ -209,7 +197,6 @@ export async function getSetMeta(
     try {
       const meta = await getSetMetaRepo(lang, setId)
       setMetaCache.set(key, meta)
-      if (meta && lang !== 'en') setMetaCache.set(`en:${setId}`, meta)
       return meta
     } finally {
       setMetaInflight.delete(key)
@@ -278,10 +265,7 @@ export async function listSetCardsRepo(
       const provider = await ensureProvider()
       const cards = await provider.listSetCards(lang, setId)
       setCardsCache.set(key, cards)
-      if (cards.length && lang !== 'en') setCardsCache.set(`en:${setId}`, cards)
       return cards
-    } catch {
-      return []
     } finally {
       setCardsInflight.delete(key)
     }
@@ -295,12 +279,7 @@ export async function listSetCardsRepo(
 export async function listAllSetsMeta(lang: CardLang): Promise<SetMeta[]> {
   const provider = await ensureProvider()
   if (usesSupabase(provider)) {
-    const rows = await provider.listSets(lang)
-    const metas: SetMeta[] = []
-    for (const s of rows) {
-      const meta = await provider.getSet(lang, s.id)
-      if (meta && meta.serieId !== 'tcgp') metas.push(meta)
-    }
+    const metas = (await listSupabaseSetMetas(lang)).filter((meta) => meta.serieId !== 'tcgp')
     metas.sort((a, b) => {
       const ad = a.releaseDate ?? ''
       const bd = b.releaseDate ?? ''

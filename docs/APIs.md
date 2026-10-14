@@ -34,9 +34,8 @@ Este documento descreve **todas as APIs e serviços externos** usados pelo Poké
 | **images.pokemontcg.io** | CDN de imagens (fallback) | Público | `imageProvider.ts` |
 | **open.er-api.com** | Câmbio EUR/USD → BRL | Público | `src/api/fx/fxProvider.ts` |
 | **Pokémon TCG API** | Preços TCGPlayer/Cardmarket (fallback + sync) | Opcional `POKEMON_TCG_API_KEY` | `src/api/prices/pokemonTcgPriceProvider.ts` |
-| **Hugging Face** | Download do modelo MobileCLIP | Público | `src/lib/scan/clip.worker.ts` |
-| **jsDelivr (Tesseract)** | Worker/WASM/lang OCR | Público | `src/lib/scan/ocr.ts` |
-| **`/scan/*`** | Arquivos estáticos do app | N/A | `public/scan/` |
+| **jsDelivr (Tesseract)** | Worker/WASM/lang OCR do scanner | Público | `src/lib/scanner/browserDeps.ts` |
+| **`/scan/set-index.json`** | Índice de coleções do catálogo | N/A | `public/scan/` |
 
 Dependências relevantes (`package.json`):
 
@@ -45,9 +44,7 @@ Dependências relevantes (`package.json`):
 | `@supabase/supabase-js` | Cliente Supabase |
 | `@tcgdex/sdk` | Cliente REST TCGdex |
 | `@tanstack/react-query` | Cache/dedupe de catálogo e preços |
-| `@xenova/transformers` | Inferência MobileCLIP no browser |
-| `onnxruntime-web` | YOLO local |
-| `tesseract.js` | OCR |
+| `tesseract.js` | OCR do número da coleção no scanner |
 
 ### Estrutura de providers
 
@@ -327,23 +324,17 @@ Filtros REST: `name=like:…`, `category=eq:…`, `pagination:page`, `pagination
 
 **Fallback:** se o health probe falhar, `cardRepository` usa **Pokémon TCG API** (`api.pokemontcg.io/v2`) — ver `pokemonTcgProvider.ts`.
 
-### 3.3 REST direto (`fetch`) — scanner
+### 3.3 Scanner
 
-**Arquivo:** `src/lib/scan/cardLookup.ts`
+O scanner não chama a API do TCGdex para identificar a carta. Ele consulta `public.cards` no Supabase e, se o catálogo local não responder, usa o mesmo `searchCardsRepo` do resto do app. O arquivo `public/scan/set-index.json` continua sendo lido por `src/api/tcgdex.ts` para resolver o total oficial de uma coleção. Detalhes do reconhecimento: `docs/scanner.md`.
 
-Além do SDK, o scanner resolve OCR → carta com HTTP puro:
-
-```ts
-const res = await fetch(`https://api.tcgdex.net/v2/${L}/cards/${setId}-${lid}`)
-```
-
-Também lista sets via REST / SDK para montar índice de abreviações. Scripts de build (`scripts/build-card-embeddings.mjs`, `build-set-index.mjs`) consultam a mesma API.
+`scripts/build-set-index.mjs` regenera esse índice a partir da API de sets do TCGdex.
 
 ### 3.4 Funções exportadas e consumidores
 
 | Função | Consumidores | Propósito |
 |--------|--------------|-----------|
-| `searchCards(lang, name, page)` | `AddCardsModal`, `ManualCardSearchModal`, `cardLookup` | Busca simples por nome / localId |
+| `searchCards(lang, name, page)` | `AddCardsModal`, fila do scanner | Busca simples por nome / localId |
 | `searchCardsAdvanced(...)` | `DeckBuilder` | Busca com filtros (categoria, tipo, set…) |
 | `fetchDeckCardMeta` | `DeckBuilder` | Meta para regras de deck |
 | `getCard` | `prices.hydrateCard`, detalhes, Pokedex | Detalhe completo + pricing |
@@ -448,67 +439,33 @@ Preferência de mercado:
 
 ---
 
-## 6. Hugging Face / Transformers.js (MobileCLIP)
+## 6. Scanner de cartas
 
-Usado no **scanner de cartas** para embedding visual + reconhecimento por similaridade.
+O reconhecimento roda no navegador. Não há modelo da Hugging Face nem índice MobileCLIP.
 
-### 6.1 Configuração
+Pipeline, limiares, índice opcional de hashes e custo: **`docs/scanner.md`**.
 
-| Item | Valor |
-|------|--------|
-| Modelo | `Xenova/mobileclip_s2` |
-| Dimensão | 512 (`SCAN_VISION_DIM`) |
-| Config | `src/lib/scan/modelConfig.ts` |
-| Worker | `src/lib/scan/clip.worker.ts` |
-| Runtime | `@xenova/transformers` (`AutoProcessor` + `CLIPVisionModelWithProjection`) |
+| Peça | Onde |
+|------|------|
+| Página | `src/pages/CardScanner.tsx` |
+| Fusão, hashes, detecção | `src/lib/scanner/` |
+| OCR | `tesseract.js` em `browserDeps.ts` |
+| Catálogo | Supabase `cards` via `catalog.ts` |
+| Inventário | `useInventory.addQty` na confirmação da fila |
 
-```ts
-processor = await AutoProcessor.from_pretrained(SCAN_VISION_MODEL)
-vision = await CLIPVisionModelWithProjection.from_pretrained(SCAN_VISION_MODEL, {
-  quantized: true,
-})
-```
-
-### 6.2 Rede
-
-Na primeira execução (ou quando o cache do browser está vazio), o Transformers.js baixa pesos/ONNX de:
-
-```
-https://huggingface.co/Xenova/mobileclip_s2/resolve/main/...
-```
-
-Prefetch opcional: `npm run scan:models` → `scripts/fetch-scan-models.mjs`  
-Build do índice: `npm run scan:embeddings` → `scripts/build-card-embeddings.mjs`
-
-### 6.3 Fluxo no app
-
-```
-CardScanner
-  → recognizer.ts (carrega /scan/embeddings.bin + .json)
-  → clip.worker.ts (embedding da foto)
-  → kNN contra o índice local
-  → candidatos → cardLookup / TCGdex para hidratar meta
-```
-
-Sem API key do Hugging Face no repositório.
+A primeira leitura baixa o worker do Tesseract (jsDelivr), como antes. Não há chave nova.
 
 ---
 
 ## 7. Tesseract.js (OCR)
 
-Extrai texto (número da carta, set, nome) da câmera como sinal complementar ao CLIP.
+Extrai o número da coleção na faixa inferior da carta já retificada. O parser (`ocrParse.ts`) segue o do pokeum: `025/193` e um código curto de coleção. O texto não decide a carta sozinho.
 
 ### 7.1 Configuração
 
-**Arquivo:** `src/lib/scan/ocr.ts`
+**Arquivo:** `src/lib/scanner/browserDeps.ts`
 
-```ts
-const Tesseract = await import('tesseract.js')
-const worker = await Tesseract.createWorker('eng')
-await worker.setParameters({
-  tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/.- ',
-})
-```
+O worker usa inglês e uma lista de caracteres limitada a letras, dígitos e `/`.
 
 ### 7.2 Downloads de rede (implícitos do pacote)
 
@@ -518,34 +475,23 @@ await worker.setParameters({
 | Core WASM | `cdn.jsdelivr.net/npm/tesseract.js-core@...` |
 | Lang data `eng` | `cdn.jsdelivr.net/npm/@tesseract.js-data/eng/...` |
 
-### 7.3 Fallback nativo
-
-Se disponível (Chrome Android / alguns desktops), usa `window.TextDetector` antes/em paralelo ao Tesseract.
-
-`warmOcr()` pré-aquece detector + worker com um canvas em branco enquanto a câmera inicia.
-
-Resultado OCR → `cardLookup.resolveCandidates` → REST TCGdex.
+`warmScanner()` pré-aquece o worker quando a página do scanner abre.
 
 ---
 
 ## 8. Assets estáticos `/scan/*`
 
-Servidos pelo Vite/Vercel a partir de `public/scan/`. **Não são API de servidor**, mas fazem parte do pipeline de dados do scanner.
-
 | Path | Consumidor | Propósito |
 |------|------------|-----------|
-| `GET /scan/set-index.json` | `cardLookup.ts`, `tcgdex.ts` | Abreviações de set / buckets por official count |
-| `GET /scan/embeddings.json` + `.bin` | `recognizer.ts` | Índice visual MobileCLIP |
-| `HEAD/GET /scan/models/yolo11n-card.onnx` | `detector.ts` (`onnxruntime-web`) | Detecção de carta na frame (opcional) |
-| `/scan/models/mobileclip-*` | prefetch local | Cópia opcional do modelo |
-
-Geração:
+| `GET /scan/set-index.json` | `src/api/tcgdex.ts` | Total oficial → ids de coleção |
+| `GET /scan/hash-index.json` | `browserDeps.ts` | Índice visual opcional. Não é publicado. Um JSON local pode ser carregado na sessão do scanner |
 
 ```bash
-npm run scan:set-index    # scripts/build-set-index.mjs
-npm run scan:embeddings   # scripts/build-card-embeddings.mjs
-npm run scan:models       # scripts/fetch-scan-models.mjs
+npm run scan:set-index
+npm run scan:hash-pilot
 ```
+
+O piloto fica em `data/scan/` e não entra no deploy. Detalhes em `docs/scanner-validation.md`.
 
 ---
 
@@ -579,10 +525,9 @@ UI / Hooks
  ├─ CardDetails / Pokedex / hydrate ► TCGdex + prices.ts + open.er-api.com
  ├─ CardImage ────────────────────► assets.tcgdex.net / images.pokemontcg.io
  └─ CardScanner
-      ├─ /scan/embeddings* + models (estático)
-      ├─ Hugging Face MobileCLIP (Transformers.js)
-      ├─ Tesseract CDN / TextDetector
-      └─ TCGdex REST (cardLookup)
+      ├─ Supabase cards (número da coleção)
+      ├─ imagens do catálogo (hash perceptual)
+      └─ Tesseract CDN
 ```
 
 ---
@@ -598,7 +543,7 @@ Arquivo de referência: `.env.example`
 
 Nenhuma outra API key é necessária no projeto:
 
-- TCGdex, CDNs, open.er-api.com, Hugging Face e Tesseract são públicos.
+- TCGdex, CDNs, open.er-api.com e Tesseract são públicos.
 - No dashboard Supabase → Authentication → URL Configuration:
   - Site URL: `http://localhost:5173` (dev) ou URL de produção
   - Redirect URLs: `http://localhost:5173/**` e URL de produção
@@ -619,7 +564,7 @@ Na Vercel, as mesmas variáveis devem estar em **Project Settings → Environmen
 | Buscar / detalhar cartas | TCGdex SDK |
 | Preço em R$ | Supabase `card_prices` → TCGdex → **Pokémon TCG API** + open.er-api.com |
 | Arte da carta | assets.tcgdex.net (+ fallback pokemontcg.io) |
-| Scanner por câmera | HF MobileCLIP + Tesseract + `/scan/*` + TCGdex REST |
+| Scanner por câmera ou foto | Navegador: detecção + hash + Tesseract + Supabase `cards` |
 | Boosters sealed | Dados locais (sem API) |
 
 ---

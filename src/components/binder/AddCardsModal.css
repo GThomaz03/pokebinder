@@ -292,6 +292,22 @@
   gap: 0.7rem;
 }
 
+.load-more {
+  margin-top: 0.75rem;
+  width: 100%;
+  min-height: 2.4rem;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.load-more:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 .result-item {
   background: var(--surface);
   border: 1px solid var(--border);

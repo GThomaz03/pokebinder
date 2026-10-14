@@ -27,7 +27,7 @@ async function main() {
   })
 
   const stats = await manager.runIncremental({
-    langs: importSources.translations.length ? ['en', 'pt'] : ['en'],
+    langs: importSources.translations.length ? ['pt', 'en', 'ja'] : ['en'],
   })
   console.log('\nSync complete:', stats)
   process.exit(stats.failed ? 1 : 0)

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CardDataSource, SyncJobStats } from '../types'
+import type { CardDataSource, ExternalCardSummary, ExternalSet, SyncJobStats } from '../types'
+import { CONTENT_LANG_PRIORITY, mergeCardByLanguagePriority } from '../languagePriority'
+import { canonicalBelongsToSet } from '../../api/cards/catalogQuery'
 import { normalizeTcgdexCard } from '../normalizers/tcgdexNormalizer'
 import { CatalogWriter } from '../repository/catalogWriter'
 import { CheckpointManager, SyncJobLogger } from './checkpoint'
@@ -80,14 +82,19 @@ export class SyncManager {
       })
     }
 
-    let sets = await this.source.getSets()
-    if (opts.setIds?.length) {
-      sets = sets.filter((s) => opts.setIds!.includes(s.id))
+    let sets = await this.collectAllSets(opts)
+
+    const localizedSetNames = new Map<string, Map<string, string>>()
+    for (const src of this.translationSources) {
+      const lang = this.cardLang(src)
+      if (lang !== 'pt' && lang !== 'ja') continue
+      try {
+        const rows = await src.getSets()
+        localizedSetNames.set(lang, new Map(rows.map((row) => [row.id, row.name])))
+      } catch {
+        /* optional */
+      }
     }
-    if (opts.serieIds?.length) {
-      sets = sets.filter((s) => s.serieId && opts.serieIds!.includes(s.serieId))
-    }
-    if (opts.limitSets) sets = sets.slice(0, opts.limitSets)
 
     for (const s of sets) {
       let seriesUuid: string | null = null
@@ -99,24 +106,17 @@ export class SyncManager {
         })
       }
 
-      let ptName: string | undefined
-      const ptSource = this.translationSources.find((src) => 'lang' in src && (src as { lang?: string }).lang === 'pt')
-      if (ptSource) {
-        try {
-          const ptSets = await ptSource.getSets()
-          ptName = ptSets.find((x) => x.id === s.id)?.name
-        } catch {
-          /* optional */
-        }
-      }
+      const ptName = localizedSetNames.get('pt')?.get(s.id)
+      const jpName = localizedSetNames.get('ja')?.get(s.id)
 
       await this.writer.upsertSet({
         sourceId: s.id,
-        name: s.name,
+        name: ptName ?? s.name,
         slug: s.id,
         seriesId: seriesUuid,
         enName: s.name,
         ptName,
+        jpName,
         releaseDate: s.releaseDate,
         logoUrl: s.logo,
         symbolUrl: s.symbol,
@@ -125,7 +125,11 @@ export class SyncManager {
         serieSlug: s.serieId,
       })
 
-      await this.checkpoint.mark('set', s.id, 'pending', { name: s.name })
+      // Incremental sync must not wipe completed checkpoints — allows resume after interruption.
+      const done = await this.checkpoint.isDone('set', s.id)
+      if (!opts.skipCompleted || !done) {
+        await this.checkpoint.mark('set', s.id, 'pending', { name: s.name })
+      }
       stats.found++
     }
   }
@@ -134,17 +138,74 @@ export class SyncManager {
     return 'lang' in src ? String((src as { lang?: string }).lang ?? 'en') : 'en'
   }
 
+  private langSources(): Map<string, CardDataSource> {
+    const map = new Map<string, CardDataSource>()
+    for (const src of [this.source, ...this.translationSources]) {
+      const lang = this.cardLang(src)
+      if (!map.has(lang)) map.set(lang, src)
+    }
+    return map
+  }
+
+  /** Union of card ids across pt/en/ja. Ids must match the set's case (`SV10` ≠ `sv10`). */
+  private async getSetSummaries(setId: string): Promise<ExternalCardSummary[]> {
+    const sources = this.langSources()
+    const byId = new Map<string, ExternalCardSummary>()
+    for (const lang of CONTENT_LANG_PRIORITY) {
+      const src = sources.get(lang)
+      if (!src) continue
+      try {
+        const summaries = await src.getCards(setId)
+        for (const summary of summaries) {
+          if (!canonicalBelongsToSet(summary.id, setId)) continue
+          if (!byId.has(summary.id)) byId.set(summary.id, summary)
+        }
+      } catch {
+        /* optional lang */
+      }
+    }
+    return [...byId.values()]
+  }
+
+  /** Merge set metadata from EN + PT + JA catalogs (JA-only sets included). */
+  private async collectAllSets(opts: ImportOptions): Promise<ExternalSet[]> {
+    const byId = new Map<string, ExternalSet>()
+    for (const src of [this.source, ...this.translationSources]) {
+      let rows = await src.getSets()
+      if (opts.setIds?.length) rows = rows.filter((s) => opts.setIds!.includes(s.id))
+      if (opts.serieIds?.length) {
+        rows = rows.filter((s) => s.serieId && opts.serieIds!.includes(s.serieId))
+      }
+      for (const s of rows) {
+        const prev = byId.get(s.id)
+        if (!prev) {
+          byId.set(s.id, s)
+          continue
+        }
+        byId.set(s.id, {
+          ...prev,
+          name: prev.name || s.name,
+          cardCount: {
+            total: Math.max(prev.cardCount?.total ?? 0, s.cardCount?.total ?? 0),
+            official: Math.max(prev.cardCount?.official ?? 0, s.cardCount?.official ?? 0),
+          },
+          serieId: prev.serieId ?? s.serieId,
+          serieName: prev.serieName ?? s.serieName,
+        })
+      }
+    }
+    let sets = [...byId.values()]
+    if (opts.limitSets) sets = sets.slice(0, opts.limitSets)
+    return sets
+  }
+
   private async importCards(
     stats: SyncJobStats,
     opts: ImportOptions,
     logger: SyncJobLogger,
   ) {
-    const cardSources =
-      this.translationSources.length > 0 ? this.translationSources : [this.source]
-    let sets = await this.source.getSets()
-    if (opts.setIds?.length) sets = sets.filter((s) => opts.setIds!.includes(s.id))
-    if (opts.serieIds?.length) sets = sets.filter((s) => s.serieId && opts.serieIds!.includes(s.serieId))
-    if (opts.limitSets) sets = sets.slice(0, opts.limitSets)
+    const cardSources = this.langSources()
+    const sets = await this.collectAllSets(opts)
 
     for (const set of sets) {
       if (opts.skipCompleted && (await this.checkpoint.isDone('set', set.id))) {
@@ -152,9 +213,9 @@ export class SyncManager {
         continue
       }
 
-      let summaries: Awaited<ReturnType<CardDataSource['getCards']>> = []
+      let summaries: ExternalCardSummary[] = []
       try {
-        summaries = await this.source.getCards(set.id)
+        summaries = await this.getSetSummaries(set.id)
       } catch (err) {
         stats.failed++
         await logger.logError({
@@ -169,7 +230,20 @@ export class SyncManager {
       }
 
       if (!summaries.length) {
-        await this.checkpoint.mark('set', set.id, 'completed', { imported: 0, empty: true })
+        const expected = set.cardCount?.total ?? 0
+        if (expected > 0) {
+          stats.failed++
+          await logger.logError({
+            source: this.source.name,
+            externalId: set.id,
+            endpoint: `/sets/${set.id}`,
+            errorType: 'empty_set',
+            message: `Set ${set.id} anunciou ${expected} cartas, mas nenhuma foi obtida`,
+          })
+          await this.checkpoint.mark('set', set.id, 'failed', { imported: 0, expected })
+        } else {
+          await this.checkpoint.mark('set', set.id, 'completed', { imported: 0, empty: true })
+        }
         continue
       }
 
@@ -177,25 +251,29 @@ export class SyncManager {
       for (const summary of summaries) {
         try {
           const byLang = new Map<string, ReturnType<typeof normalizeTcgdexCard>>()
-          for (const src of cardSources) {
-            const lang = this.cardLang(src)
+          for (const lang of CONTENT_LANG_PRIORITY) {
+            const src = cardSources.get(lang)
+            if (!src) continue
             const full = await src.getCard(summary.id, lang)
             if (!full) continue
-            const norm = normalizeTcgdexCard(full, lang, set.id, this.cardSource)
-            const prev = byLang.get(norm.canonicalId)
-            if (prev) {
-              prev.translations = [...prev.translations, ...norm.translations]
-            } else {
-              byLang.set(norm.canonicalId, norm)
-            }
+            const normalized = normalizeTcgdexCard(full, lang, set.id, this.cardSource)
+            // A case-insensitive API can answer SV10-001 with the English card sv10-001.
+            if (!canonicalBelongsToSet(normalized.canonicalId, set.id)) continue
+            byLang.set(lang, {
+              ...normalized,
+              canonicalId: summary.id,
+              sourceId: summary.id,
+              setSourceId: set.id,
+            })
           }
 
-          for (const norm of byLang.values()) {
-            const { created } = await this.writer.upsertCard(norm)
-            if (created) stats.created++
-            else stats.updated++
-            imported++
-          }
+          const norm = mergeCardByLanguagePriority(byLang)
+          if (!norm) continue
+
+          const { created } = await this.writer.upsertCard(norm)
+          if (created) stats.created++
+          else stats.updated++
+          imported++
         } catch (err) {
           stats.failed++
           await logger.logError({
@@ -208,12 +286,9 @@ export class SyncManager {
         }
       }
 
-      await this.writer.updateSetCoverage(
-        set.id,
-        set.cardCount?.official ?? set.cardCount?.total ?? summaries.length,
-        imported,
-      )
-      await this.checkpoint.mark('set', set.id, 'completed', { imported })
+      await this.writer.updateSetCoverage(set.id, summaries.length, imported)
+      const status = imported === summaries.length ? 'completed' : 'failed'
+      await this.checkpoint.mark('set', set.id, status, { imported, expected: summaries.length })
       stats.found += summaries.length
     }
   }

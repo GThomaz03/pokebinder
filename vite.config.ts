@@ -28,10 +28,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      exclude: ['onnxruntime-web', '@xenova/transformers'],
-    },
-    worker: {
-      format: 'es',
+      include: ['tesseract.js'],
     },
   }
 })

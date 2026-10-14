@@ -1,0 +1,89 @@
+{
+  "generatedAt": "2026-09-14T17:10:32.381Z",
+  "totals": {
+    "universe": 36315,
+    "inDb": 42042,
+    "missingCards": 5,
+    "missingTranslations": 0
+  },
+  "missingCards": [
+    {
+      "id": "exu-%3F",
+      "name": "Unown",
+      "langs": [
+        "en"
+      ]
+    },
+    {
+      "id": "PCG2-067",
+      "name": "レイカザの星",
+      "langs": [
+        "ja"
+      ]
+    },
+    {
+      "id": "PCG6-043",
+      "name": "レイカザ（デルタ種）",
+      "langs": [
+        "ja"
+      ]
+    },
+    {
+      "id": "PCG7-015",
+      "name": "レイカザ（デルタ種）",
+      "langs": [
+        "ja"
+      ]
+    },
+    {
+      "id": "PCG9-028",
+      "name": "Rayquaza Ex（デルタ種）",
+      "langs": [
+        "ja"
+      ]
+    }
+  ],
+  "missingTranslations": [],
+  "missingBySet": [
+    {
+      "setId": "exu",
+      "setName": "Unseen Forces Unown Collection",
+      "count": 1,
+      "cardIds": [
+        "exu-%3F"
+      ]
+    },
+    {
+      "setId": "PCG2",
+      "setName": "蒼空の激突",
+      "count": 1,
+      "cardIds": [
+        "PCG2-067"
+      ]
+    },
+    {
+      "setId": "PCG6",
+      "setName": "ホロンの研究塔",
+      "count": 1,
+      "cardIds": [
+        "PCG6-043"
+      ]
+    },
+    {
+      "setId": "PCG7",
+      "setName": "ホロンの幻影",
+      "count": 1,
+      "cardIds": [
+        "PCG7-015"
+      ]
+    },
+    {
+      "setId": "PCG9",
+      "setName": "さいはての攻防",
+      "count": 1,
+      "cardIds": [
+        "PCG9-028"
+      ]
+    }
+  ]
+}
