@@ -216,34 +216,6 @@ type DbSet = {
 const SET_SELECT =
   'id, source_id, name, pt_name, en_name, logo_url, symbol_url, total_cards, official_total, release_date, serie_slug'
 
-const SEARCH_SELECT = `
-  canonical_id, name, name_pt, name_en, name_ja, number,
-  image_low_url, image_high_url, image_url, set_source_id, set_name,
-  category, types, stage, rarity, trainer_type, energy_type, regulation_mark, hp
-`
-
-type SearchRow = {
-  canonical_id: string
-  name: string
-  name_pt: string | null
-  name_en: string | null
-  name_ja: string | null
-  number: string | null
-  image_low_url: string | null
-  image_high_url: string | null
-  image_url: string | null
-  set_source_id: string | null
-  set_name: string | null
-  category: string | null
-  types: string[] | null
-  stage: string | null
-  rarity: string | null
-  trainer_type: string | null
-  energy_type: string | null
-  regulation_mark: string | null
-  hp: number | null
-}
-
 function setDisplayName(row: DbSet, lang: CardLang): string {
   if (lang === 'pt') return row.pt_name ?? row.name
   return row.en_name ?? row.name
@@ -260,31 +232,6 @@ function mapSetMeta(row: DbSet, lang: CardLang): SetMeta {
     releaseDate: row.release_date ?? undefined,
     serieName: row.serie_slug ?? undefined,
     serieId: row.serie_slug ?? undefined,
-  }
-}
-
-function searchDisplayName(row: SearchRow, lang: CardLang): string {
-  if (lang === 'pt') return row.name_pt || row.name
-  if (lang === 'ja') return row.name_ja || row.name
-  return row.name_en || row.name
-}
-
-function mapSearchHit(row: SearchRow, lang: CardLang): DeckSearchHit {
-  return {
-    id: row.canonical_id,
-    name: searchDisplayName(row, lang),
-    localId: row.number ?? '',
-    image: row.image_low_url ?? row.image_high_url ?? row.image_url ?? undefined,
-    setId: row.set_source_id ?? undefined,
-    category: row.category ?? undefined,
-    types: row.types ?? undefined,
-    stage: row.stage ?? undefined,
-    rarity: row.rarity ?? undefined,
-    setName: row.set_name ?? undefined,
-    trainerType: row.trainer_type ?? undefined,
-    energyType: row.energy_type ?? undefined,
-    regulationMark: row.regulation_mark ?? undefined,
-    hp: row.hp ?? undefined,
   }
 }
 
@@ -319,6 +266,82 @@ async function findSetRow(setId: string): Promise<DbSet | null> {
   return null
 }
 
+function hitFromCard(row: DbCard, lang: CardLang, translatedName?: string): DeckSearchHit {
+  const brief = mapBrief(row, lang, translatedName ? { name: translatedName } : null)
+  return {
+    ...brief,
+    category: row.category ?? undefined,
+    types: row.types ?? undefined,
+    stage: row.stage ?? undefined,
+    rarity: row.rarity ?? undefined,
+    setName: row.sets?.name,
+    setId: row.sets?.source_id ?? brief.setId,
+    trainerType: row.trainer_type ?? undefined,
+    energyType: row.energy_type ?? undefined,
+    regulationMark: row.regulation_mark ?? undefined,
+    hp: row.hp ?? undefined,
+  }
+}
+
+function matchesSearchFilters(
+  hit: DeckSearchHit,
+  opts: { category?: string; type?: string },
+): boolean {
+  if (opts.category && !categoryAliases(opts.category).includes(hit.category ?? '')) return false
+  if (opts.type && !(hit.types ?? []).some((type) => typeAliases(opts.type!).includes(type))) return false
+  return true
+}
+
+/** Name search uses the trigram indexes on `cards.name` and `card_translations.name`. */
+async function searchByName(
+  lang: CardLang,
+  text: string,
+  opts: { category?: string; type?: string },
+  page: number,
+  pageSize: number,
+): Promise<DeckSearchHit[]> {
+  if (!supabase) return []
+  const from = (page - 1) * pageSize
+  const needed = from + pageSize
+  let cardsQuery = supabase.from('cards').select(CARD_SELECT).ilike('name', `%${text}%`)
+  if (opts.category) cardsQuery = cardsQuery.in('category', categoryAliases(opts.category))
+  if (opts.type) cardsQuery = cardsQuery.overlaps('types', typeAliases(opts.type))
+
+  const [cardsRes, translationsRes] = await Promise.all([
+    cardsQuery.order('canonical_id', { ascending: true }).range(0, needed),
+    supabase
+      .from('card_translations')
+      .select(
+        'name, language, cards!inner(canonical_id, name, number, image_low_url, image_high_url, image_url, category, types, stage, rarity, trainer_type, energy_type, regulation_mark, hp, sets(source_id, name))',
+      )
+      .ilike('name', `%${text}%`)
+      .limit((needed + 1) * 3),
+  ])
+  if (cardsRes.error) throw new Error(cardsRes.error.message)
+  if (translationsRes.error) throw new Error(translationsRes.error.message)
+
+  const byId = new Map<string, DeckSearchHit>()
+  for (const raw of cardsRes.data ?? []) {
+    const hit = hitFromCard(asDbCard(raw), lang)
+    if (matchesSearchFilters(hit, opts)) byId.set(hit.id, hit)
+  }
+  for (const row of translationsRes.data ?? []) {
+    const card = asDbCard(row.cards)
+    const preferred = row.language === langToDb(lang) ? row.name : undefined
+    const existing = byId.get(card.canonical_id)
+    if (!existing) {
+      const hit = hitFromCard(card, lang, preferred ?? row.name)
+      if (matchesSearchFilters(hit, opts)) byId.set(hit.id, hit)
+      continue
+    }
+    if (preferred) existing.name = preferred
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .slice(from, from + pageSize)
+}
+
 async function querySearchView(
   lang: CardLang,
   opts: { text?: string; numbers?: string[]; category?: string; type?: string },
@@ -326,17 +349,11 @@ async function querySearchView(
   pageSize: number,
 ): Promise<DeckSearchHit[]> {
   if (!supabase) return []
+  if (opts.text) return searchByName(lang, opts.text, opts, page, pageSize)
+
   const from = (page - 1) * pageSize
-  let builder = supabase.from('catalog_cards_search').select(SEARCH_SELECT)
-  if (opts.numbers?.length) {
-    const clauses = opts.numbers.flatMap((n) => [`number.eq.${n}`, `canonical_id.ilike.%-${n}`])
-    builder = builder.or(clauses.join(','))
-  } else if (opts.text) {
-    const safe = opts.text
-    builder = builder.or(
-      `name.ilike.%${safe}%,name_pt.ilike.%${safe}%,name_en.ilike.%${safe}%,name_ja.ilike.%${safe}%,canonical_id.ilike.%${safe}%`,
-    )
-  }
+  let builder = supabase.from('cards').select(CARD_SELECT)
+  if (opts.numbers?.length) builder = builder.in('number', opts.numbers)
   if (opts.category) builder = builder.in('category', categoryAliases(opts.category))
   if (opts.type) builder = builder.overlaps('types', typeAliases(opts.type))
 
@@ -344,7 +361,9 @@ async function querySearchView(
     .order('canonical_id', { ascending: true })
     .range(from, from + pageSize - 1)
   if (error) throw new Error(error.message)
-  return ((data ?? []) as SearchRow[]).map((row) => mapSearchHit(row, lang))
+  const rows = (data ?? []).map(asDbCard)
+  const trs = await fetchTranslation(rows.map((row) => row.canonical_id), lang)
+  return rows.map((row) => hitFromCard(row, lang, trs.get(row.canonical_id)?.name))
 }
 
 /** One round trip per page of sets. Used by the collection browser. */

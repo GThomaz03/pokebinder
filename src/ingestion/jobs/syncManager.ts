@@ -23,6 +23,26 @@ export type SyncManagerConfig = {
   cardSource?: string
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message: unknown }).message
+    if (typeof message === 'string' && message) return message
+    if (message != null) {
+      try {
+        return JSON.stringify(message)
+      } catch {
+        return String(message)
+      }
+    }
+  }
+  try {
+    return JSON.stringify(err)
+  } catch {
+    return String(err)
+  }
+}
+
 export class SyncManager {
   private db: SupabaseClient
   private sourceId: string | null
@@ -58,7 +78,7 @@ export class SyncManager {
         .eq('name', this.dataSourceName)
       await logger.finish(stats.failed ? 'partial' : 'completed', stats)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = errorMessage(err)
       await logger.finish('failed', stats, msg)
       throw err
     }
@@ -223,7 +243,7 @@ export class SyncManager {
           externalId: set.id,
           endpoint: `/sets/${set.id}`,
           errorType: 'fetch_set',
-          message: err instanceof Error ? err.message : String(err),
+          message: errorMessage(err),
         })
         await this.checkpoint.mark('set', set.id, 'failed')
         continue
@@ -281,7 +301,7 @@ export class SyncManager {
             externalId: summary.id,
             endpoint: `/cards/${summary.id}`,
             errorType: 'upsert_card',
-            message: err instanceof Error ? err.message : String(err),
+            message: errorMessage(err),
           })
         }
       }
