@@ -227,7 +227,7 @@ export function cardImageCandidates(
 ): string[] {
   if (!imageBase) return []
 
-  if (IMAGE_FILE_RE.test(imageBase)) {
+  if (IMAGE_FILE_RE.test(imageBase) && !/assets\.tcgdex\.net/i.test(imageBase)) {
     const out = [imageBase]
     if (/_hires\.(png|jpg|jpeg|webp)/i.test(imageBase)) {
       pushUnique(out, imageBase.replace(/_hires(\.(png|jpg|jpeg|webp))/i, '$1'))

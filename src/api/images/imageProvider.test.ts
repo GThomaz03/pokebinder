@@ -13,6 +13,14 @@ describe('card images', () => {
     expect(cardImageCandidates(STELLAR, 'low')[0]).toBe(`${STELLAR}/low.webp`)
   })
 
+  it('tries the English file when a resolved Portuguese URL is missing', () => {
+    const portuguese = 'https://assets.tcgdex.net/pt/xy/xy3/66/high.webp'
+    const urls = cardImageCandidates(portuguese, 'high')
+    expect(urls[0]).toBe(portuguese)
+    expect(urls).toContain('https://assets.tcgdex.net/en/xy/xy3/66/high.webp')
+    expect(urls).toContain('https://assets.tcgdex.net/pt/xy/xy3/66/low.webp')
+  })
+
   it('rejects the Scrydex card-back URL for a padded set id', () => {
     expect(isLegacyCatalogImage('https://images.scrydex.com/pokemon/sv07-001/small')).toBe(true)
     expect(isLegacyCatalogImage('https://images.scrydex.com/pokemon/sv7-1/small')).toBe(false)

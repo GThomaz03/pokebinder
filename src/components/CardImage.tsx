@@ -50,10 +50,9 @@ function buildCandidates(
     }
   }
 
-  // When hydrate already gave us a usable image base/URL, skip inferred fallbacks —
-  // they often load TCGdex card-back placeholders for newer sets (sv10.5b, me02.5, etc.).
-  const hasAuthoritativeSrc = Boolean(src && !isLegacyCatalogImage(src))
-  if (meta?.cardId && !hasAuthoritativeSrc) {
+  // Inferred URLs come after the stored art. A Portuguese file that 404s can
+  // still reach the English file built above; inference covers cards with no CDN base.
+  if (meta?.cardId) {
     for (const u of inferMissingImageCandidates({
       cardId: meta.cardId,
       name: meta.cardName,
