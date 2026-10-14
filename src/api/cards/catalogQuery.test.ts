@@ -5,13 +5,26 @@ import {
   canonicalIdLikePrefix,
   categoryAliases,
   compareLocalIds,
+  dbLanguageValues,
   numberSearchVariants,
+  printingLanguage,
   resolveExistingSetId,
   sanitizeSearchTerm,
   setIdFromCanonicalId,
   setSourceIdCandidates,
   typeAliases,
 } from './catalogQuery'
+
+describe('printing language', () => {
+  it('keeps Brazilian, English and Japanese printings distinct', () => {
+    expect(printingLanguage('pt-BR')).toBe('pt')
+    expect(printingLanguage('en')).toBe('en')
+    expect(printingLanguage('ja')).toBe('ja')
+    expect(dbLanguageValues('pt')).toEqual(['pt-BR', 'pt'])
+    expect(dbLanguageValues('en')).toEqual(['en'])
+    expect(dbLanguageValues('ja')).toEqual(['ja', 'jp'])
+  })
+})
 
 describe('set id case', () => {
   const existing = new Set(['sm12', 'SM12', 'sv1', 'sv10', 'SV10'])

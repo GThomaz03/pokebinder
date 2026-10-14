@@ -57,7 +57,7 @@ function mapNormalized(lang: CardLang, raw: Record<string, unknown>): Normalized
   }
 }
 
-function variantToInternal(v: CardVariantEntry): CardVariant {
+function variantToInternal(v: CardVariantEntry, lang: CardLang): CardVariant {
   return {
     key: v.key,
     cardId: v.cardId,
@@ -68,6 +68,7 @@ function variantToInternal(v: CardVariantEntry): CardVariant {
     setId: v.setId,
     variant: v.variant,
     variantLabel: v.variantLabel,
+    lang,
     priceKey: v.key,
   }
 }
@@ -143,7 +144,7 @@ export const tcgdexCardProvider: CardProvider = {
 
   async fetchSpeciesVariants(lang, dexId, speciesName) {
     const variants = await fetchSpeciesVariants(lang, dexId, speciesName)
-    return variants.map(variantToInternal)
+    return variants.map((variant) => variantToInternal(variant, lang))
   },
 
   fetchDeckCardMeta(lang, cardId) {

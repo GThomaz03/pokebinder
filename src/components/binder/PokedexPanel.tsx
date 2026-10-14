@@ -16,6 +16,12 @@ const NATIONALITIES: { value: CardLang; short: string; label: string }[] = [
   { value: 'ja', short: 'JP', label: 'Japão (JP)' },
 ]
 
+function nationalityBadge(lang: CardLang): string {
+  if (lang === 'ja') return 'JP'
+  if (lang === 'en') return 'EN'
+  return 'PT'
+}
+
 type Props = {
   open: boolean
   slot: PokedexSlot
@@ -79,10 +85,15 @@ export function PokedexPanel({
     }
   }, [open, slot.dexId, cardLang, speciesName])
 
+  const inNationality = useMemo(
+    () => variants.filter((card) => card.lang === cardLang),
+    [variants, cardLang],
+  )
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return variants
-    return variants.filter((v) => {
+    if (!q) return inNationality
+    return inNationality.filter((v) => {
       const name = v.name.toLowerCase()
       const set = (v.setName ?? '').toLowerCase()
       const num = String(v.localId).toLowerCase()
@@ -98,7 +109,7 @@ export function PokedexPanel({
         id.includes(q)
       )
     })
-  }, [variants, query])
+  }, [inNationality, query])
 
   const isWishlist = mode === 'wishlist'
   const ownLabel = isWishlist ? 'Quero' : 'Tenho'
@@ -173,7 +184,7 @@ export function PokedexPanel({
             <p className="dex-sub">
               {loading
                 ? `Carregando versões (${natLabel})…`
-                : `${filtered.length} de ${variants.length} versões · ${natLabel}${
+                : `${filtered.length} de ${inNationality.length} versões · ${natLabel}${
                     isWishlist
                       ? ' · lista desejada'
                       : ' · defina a carta e marque Tenho quando conseguir'
@@ -260,7 +271,7 @@ export function PokedexPanel({
                       <div className="ph">Sem imagem</div>
                     )}
                     {isTop && <span className="top-badge">TOPO</span>}
-                    <span className="nat-badge">{cardLang.toUpperCase()}</span>
+                    <span className="nat-badge">{nationalityBadge(card.lang)}</span>
                     {price && (
                       <span className="price" title={ESTIMATED_BRL_HINT}>
                         {price}

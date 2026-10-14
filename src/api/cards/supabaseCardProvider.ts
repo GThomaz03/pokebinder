@@ -7,7 +7,9 @@ import {
   canonicalIdLikePrefix,
   categoryAliases,
   compareLocalIds,
+  dbLanguageValues,
   numberSearchVariants,
+  printingLanguage,
   sanitizeSearchTerm,
   setSourceIdCandidates,
   typeAliases,
@@ -43,7 +45,14 @@ type DbCard = {
   legalities: Record<string, boolean> | null
   artist: string | null
   language: string
-  sets?: { source_id: string; name: string; en_name: string | null; pt_name: string | null; serie_slug: string | null } | null
+  sets?: {
+    source_id: string
+    name: string
+    en_name: string | null
+    pt_name: string | null
+    jp_name: string | null
+    serie_slug: string | null
+  } | null
 }
 
 function asDbCard(row: unknown): DbCard {
@@ -142,7 +151,7 @@ const CARD_SELECT = `
   canonical_id, name, number, image_high_url, image_low_url, image_url,
   rarity, types, national_pokedex_numbers, category, stage, trainer_type,
   energy_type, effect, hp, regulation_mark, legalities, artist, language,
-  sets (source_id, name, en_name, pt_name, serie_slug)
+  sets (source_id, name, en_name, pt_name, jp_name, serie_slug)
 `
 
 const BATCH_CHUNK = 100
@@ -515,6 +524,7 @@ export const supabaseCardProvider: CardProvider = {
         .from('cards')
         .select(CARD_SELECT)
         .contains('national_pokedex_numbers', [dexId])
+        .in('language', dbLanguageValues(lang))
         .order('canonical_id', { ascending: true })
         .range(from, from + CATALOG_FETCH_PAGE_SIZE - 1)
       if (error) throw new Error(error.message)
@@ -531,6 +541,7 @@ export const supabaseCardProvider: CardProvider = {
       .from('cards')
       .select(CARD_SELECT)
       .ilike('name', `%${sanitizeSearchTerm(token)}%`)
+      .in('language', dbLanguageValues(lang))
       .order('canonical_id', { ascending: true })
       .limit(CATALOG_FETCH_PAGE_SIZE)
     if (nameError) throw new Error(nameError.message)
@@ -600,6 +611,13 @@ export const supabaseCardProvider: CardProvider = {
   },
 }
 
+function setLabel(sets: DbCard['sets'], lang: CardLang): string | undefined {
+  if (!sets) return undefined
+  if (lang === 'pt') return sets.pt_name?.trim() || sets.name
+  if (lang === 'ja') return sets.jp_name?.trim() || sets.name
+  return sets.en_name?.trim() || sets.name
+}
+
 async function mapVariants(cards: DbCard[], lang: CardLang): Promise<CardVariant[]> {
   if (!supabase || !cards.length) return []
   const ids = cards.map((c) => c.canonical_id)
@@ -640,6 +658,7 @@ async function mapVariants(cards: DbCard[], lang: CardLang): Promise<CardVariant
 
   const out: CardVariant[] = []
   for (const c of cards) {
+    const printing = printingLanguage(c.language)
     const types = variantsByCard.get(c.canonical_id)?.length
       ? variantsByCard.get(c.canonical_id)!
       : ['normal']
@@ -647,13 +666,14 @@ async function mapVariants(cards: DbCard[], lang: CardLang): Promise<CardVariant
       out.push({
         key: `${c.canonical_id}::${vt}`,
         cardId: c.canonical_id,
-        name: trs.get(c.canonical_id)?.name ?? c.name,
+        name: (printing === lang ? trs.get(c.canonical_id)?.name : undefined) ?? c.name,
         localId: c.number ?? '',
         image: c.image_low_url ?? c.image_high_url ?? undefined,
-        setName: c.sets?.name,
+        setName: setLabel(c.sets, printing),
         setId: c.sets?.source_id,
         variant: vt,
         variantLabel: vt,
+        lang: printing,
         priceKey: `${c.canonical_id}::${vt}`,
       })
     }

@@ -77,6 +77,8 @@ export type CardVariant = {
   setId?: string
   variant: string
   variantLabel: string
+  /** Nationality of this printing. */
+  lang: CardLang
   /** Optional price key for priceRepository — not embedded market data */
   priceKey?: string
 }

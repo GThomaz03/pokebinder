@@ -273,6 +273,7 @@ export async function fetchPokemonTcgSpeciesVariants(
     setId: v.setId,
     variant: v.variant,
     variantLabel: v.variantLabel,
+    lang: 'en',
     priceKey: v.key,
   }))
 }

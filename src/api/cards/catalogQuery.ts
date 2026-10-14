@@ -1,3 +1,4 @@
+import type { CardLang } from '../../types'
 import { normalizeCatalogSetId, baseCardId } from '../cardKeys'
 
 /** Page size for name search in the add-card modal and deck builder. */
@@ -81,6 +82,21 @@ export function sanitizeSearchTerm(raw: string): string {
 
 export function compareLocalIds(a: string, b: string): number {
   return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' })
+}
+
+/** Printing language stored on `cards.language`, not a translated name. */
+export function printingLanguage(language: string | null | undefined): CardLang {
+  const value = (language ?? '').trim().toLowerCase()
+  if (value === 'pt' || value === 'pt-br' || value === 'br') return 'pt'
+  if (value === 'ja' || value === 'jp') return 'ja'
+  return 'en'
+}
+
+/** Values of `cards.language` that belong to one nationality filter. */
+export function dbLanguageValues(lang: CardLang): string[] {
+  if (lang === 'pt') return ['pt-BR', 'pt']
+  if (lang === 'ja') return ['ja', 'jp']
+  return ['en']
 }
 
 export function numberSearchVariants(raw: string): string[] {
