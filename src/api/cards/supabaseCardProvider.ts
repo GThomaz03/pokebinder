@@ -262,6 +262,7 @@ export async function listCatalogSetRows() {
     enName: row.en_name,
     jpName: row.jp_name,
     logoUrl: row.logo_url,
+    symbolUrl: row.symbol_url,
     cardCount: row.total_cards ?? 0,
     officialTotal: row.official_total,
     releaseDate: row.release_date,

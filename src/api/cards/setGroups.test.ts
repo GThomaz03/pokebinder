@@ -55,6 +55,33 @@ describe('collection grouping', () => {
     expect(groups.find((group) => group.id === 'SV2a')?.covers[0]).toContain('/ja/SV/SV2a/')
   })
 
+  it('uses the Portuguese logo stored under the real series folder', () => {
+    const [group] = groupCatalogSets([
+      {
+        sourceId: 'cel25',
+        name: 'Celebrações',
+        ptName: 'Celebrações',
+        enName: 'Celebrations',
+        cardCount: 25,
+        logoUrl: 'https://assets.tcgdex.net/en/swsh/cel25/logo',
+      },
+    ])
+    expect(group?.covers[0]).toBe('https://assets.tcgdex.net/pt/swsh/cel25/logo.webp')
+    expect(group?.editions.map((edition) => edition.lang)).toEqual(['pt', 'en'])
+  })
+
+  it('keeps a verified logo ahead of guesses that have no file', () => {
+    const [group] = groupCatalogSets([
+      {
+        sourceId: '2023sv',
+        name: "McDonald's Collection 2023",
+        enName: "McDonald's Collection 2023",
+        cardCount: 15,
+      },
+    ])
+    expect(group?.covers[0]).toContain('mcdonald_s-match-battle-2023.png')
+  })
+
   it('uses the English cover when there is no Portuguese edition', () => {
     const [group] = groupCatalogSets([
       {
