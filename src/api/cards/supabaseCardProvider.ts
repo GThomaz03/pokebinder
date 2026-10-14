@@ -205,6 +205,7 @@ type DbSet = {
   name: string
   pt_name: string | null
   en_name: string | null
+  jp_name: string | null
   logo_url: string | null
   symbol_url: string | null
   total_cards: number | null
@@ -214,7 +215,7 @@ type DbSet = {
 }
 
 const SET_SELECT =
-  'id, source_id, name, pt_name, en_name, logo_url, symbol_url, total_cards, official_total, release_date, serie_slug'
+  'id, source_id, name, pt_name, en_name, jp_name, logo_url, symbol_url, total_cards, official_total, release_date, serie_slug'
 
 function setDisplayName(row: DbSet, lang: CardLang): string {
   if (lang === 'pt') return row.pt_name ?? row.name
@@ -250,6 +251,22 @@ async function fetchAllSets(): Promise<DbSet[]> {
     all.push(...rows)
     if (rows.length < CATALOG_FETCH_PAGE_SIZE) return all
   }
+}
+
+export async function listCatalogSetRows() {
+  const rows = await fetchAllSets()
+  return rows.map((row) => ({
+    sourceId: row.source_id,
+    name: row.name,
+    ptName: row.pt_name,
+    enName: row.en_name,
+    jpName: row.jp_name,
+    logoUrl: row.logo_url,
+    cardCount: row.total_cards ?? 0,
+    officialTotal: row.official_total,
+    releaseDate: row.release_date,
+    serieSlug: row.serie_slug,
+  }))
 }
 
 async function findSetRow(setId: string): Promise<DbSet | null> {

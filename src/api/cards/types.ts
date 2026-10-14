@@ -33,6 +33,12 @@ export type CardBrief = {
   setId?: string
 }
 
+export type SetEdition = {
+  id: string
+  lang: 'pt' | 'en' | 'ja'
+  name: string
+}
+
 export type SetMeta = {
   id: string
   name: string
@@ -47,6 +53,9 @@ export type SetMeta = {
   serieName?: string
   /** TCGdex series id (e.g. sv, me, tcgp) — used to filter Pocket from physical browse. */
   serieId?: string
+  editions?: SetEdition[]
+  /** Ordered cover attempts. The first that loads is shown. */
+  covers?: string[]
 }
 
 /** Brief card row from a set listing (`GET /sets/{id}` → cards[]). */

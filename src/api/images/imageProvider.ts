@@ -116,7 +116,7 @@ function pokemonTcgIoSupported(setId: string): boolean {
   return true
 }
 
-function seriesFromSetId(setId: string): string | undefined {
+export function seriesFromSetId(setId: string): string | undefined {
   const lower = setId.toLowerCase()
   for (const serie of SERIES_PREFIXES) {
     if (lower === serie || lower.startsWith(serie)) return serie

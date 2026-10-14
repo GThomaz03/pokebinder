@@ -127,22 +127,25 @@
 
 .browse-set-body {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.55rem;
   align-items: center;
-  min-height: 3.25rem;
+  min-height: 4.6rem;
 }
 
 .browse-set-logo {
   min-width: 0;
-  height: 2.75rem;
+  height: 4.4rem;
   display: grid;
   place-items: center;
   justify-items: start;
+  background: #0c1016;
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
 }
 
 .browse-set-logo img {
-  max-height: 2.75rem;
+  max-height: 3.7rem;
   max-width: 100%;
   width: auto;
   object-fit: contain;
@@ -283,4 +286,25 @@
   .browse-cards-grid {
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   }
+}
+
+.browse-lang {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.browse-lang button {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.28rem 0.6rem;
+  cursor: pointer;
+}
+
+.browse-lang button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #0a0c10;
+  border-color: var(--accent);
 }

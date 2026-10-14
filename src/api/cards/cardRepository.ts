@@ -9,6 +9,7 @@ import type {
   DeckSearchHit,
   NormalizedCard,
   SetCardBrief,
+  SetEdition,
   SetMeta,
 } from './types'
 import { tcgdexCardProvider } from './tcgdexCardProvider'
@@ -16,8 +17,9 @@ import {
   supabaseCardProvider,
   isCatalogPopulated,
   fetchCardsByIds,
-  listSupabaseSetMetas,
+  listCatalogSetRows,
 } from './supabaseCardProvider'
+import { groupCatalogSets } from './setGroups'
 import { isTcgdexAvailable, getCachedTcgdexAvailability } from './tcgdexHealth'
 import { getPokemonTcgCardById, searchPokemonTcgCards } from './pokemonTcgProvider'
 
@@ -279,8 +281,20 @@ export async function listSetCardsRepo(
 export async function listAllSetsMeta(lang: CardLang): Promise<SetMeta[]> {
   const provider = await ensureProvider()
   if (usesSupabase(provider)) {
-    const metas = (await listSupabaseSetMetas(lang)).filter((meta) => meta.serieId !== 'tcgp')
-    metas.sort((a, b) => {
+    const grouped = groupCatalogSets(await listCatalogSetRows())
+      .filter((meta) => meta.serieId !== 'tcgp')
+      .map((group) => ({
+        id: group.id,
+        name: group.name,
+        logo: group.covers[0],
+        covers: group.covers,
+        cardCount: group.cardCount,
+        cardCountOfficial: group.cardCountOfficial,
+        releaseDate: group.releaseDate,
+        serieId: group.serieId,
+        editions: group.editions,
+      }))
+    grouped.sort((a, b) => {
       const ad = a.releaseDate ?? ''
       const bd = b.releaseDate ?? ''
       if (ad && bd) return bd.localeCompare(ad)
@@ -288,7 +302,7 @@ export async function listAllSetsMeta(lang: CardLang): Promise<SetMeta[]> {
       if (bd) return 1
       return a.name.localeCompare(b.name, 'pt-BR')
     })
-    return metas
+    return grouped
   }
 
   const { fetchSetsMeta } = await import('../tcgdex')
@@ -354,5 +368,6 @@ export type {
   DeckSearchHit,
   NormalizedCard,
   SetCardBrief,
+  SetEdition,
   SetMeta,
 }

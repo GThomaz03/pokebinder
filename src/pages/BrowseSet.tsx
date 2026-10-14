@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  getSetMeta,
+  listAllSetsMeta,
   listSetCardsRepo,
   type SetCardBrief,
+  type SetEdition,
   type SetMeta,
 } from '../api/cards/cardRepository'
 import { baseCardId } from '../api/cardKeys'
@@ -11,44 +12,63 @@ import { CardDetailsModal } from '../components/binder/CardDetailsModal'
 import { CardImage } from '../components/CardImage'
 import { CardSkeletonGrid } from '../components/Skeleton'
 import { useInventory } from '../hooks/useInventory'
-import { useLanguage } from '../hooks/useLanguage'
-import { defaultSettings } from '../types'
+import { defaultSettings, type CardLang } from '../types'
 import './Browse.css'
 
 export function BrowseSetPage() {
   const { setId: rawSetId } = useParams<{ setId: string }>()
   const setId = rawSetId ? decodeURIComponent(rawSetId) : ''
-  const { lang } = useLanguage()
   const { entries, getQty } = useInventory()
   const [meta, setMeta] = useState<SetMeta | null>(null)
   const [cards, setCards] = useState<SetCardBrief[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [editionLang, setEditionLang] = useState<'pt' | 'en' | null>(null)
   const [detailsKey, setDetailsKey] = useState<string | null>(null)
   const detailsSettings = useMemo(() => defaultSettings(), [])
+  const languageEditions = (meta?.editions ?? []).filter(
+    (edition): edition is SetEdition & { lang: 'pt' | 'en' } => edition.lang === 'pt' || edition.lang === 'en',
+  )
+  const activeEdition =
+    languageEditions.find((edition) => edition.lang === editionLang) ??
+    languageEditions.find((edition) => edition.lang === 'pt') ??
+    languageEditions[0]
 
   useEffect(() => {
     if (!setId) return
     let cancelled = false
     setLoading(true)
     setError(null)
-    void Promise.all([getSetMeta(lang, setId), listSetCardsRepo(lang, setId)])
-      .then(([nextMeta, nextCards]) => {
+    void (async () => {
+      try {
+        const groups = await listAllSetsMeta('pt')
         if (cancelled) return
-        setMeta(nextMeta)
+        const group = groups.find(
+          (item) => item.id === setId || item.editions?.some((edition) => edition.id === setId),
+        ) ?? null
+        setMeta(group)
+        const editions = (group?.editions ?? []).filter(
+          (edition) => edition.lang === 'pt' || edition.lang === 'en',
+        )
+        const edition = editions.find((item) => item.lang === editionLang)
+          ?? editions.find((item) => item.lang === 'pt')
+          ?? editions[0]
+          ?? group?.editions?.[0]
+        const nextLang: CardLang = edition?.lang === 'en' ? 'en' : edition?.lang === 'ja' ? 'ja' : 'pt'
+        const nextCards = await listSetCardsRepo(nextLang, edition?.id ?? setId)
+        if (cancelled) return
         setCards(nextCards)
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setError('Não foi possível carregar as cartas desta coleção.')
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false)
-      })
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [lang, setId])
+  }, [setId, editionLang])
 
   const ownedIds = useMemo(() => {
     const set = new Set<string>()
@@ -96,6 +116,20 @@ export function BrowseSetPage() {
 
       <div className="browse-toolbar">
         <h2>Cartas ({filtered.length})</h2>
+        {languageEditions.length > 1 && (
+          <div className="browse-lang" role="group" aria-label="Idioma da coleção">
+            {languageEditions.map((edition) => (
+              <button
+                key={`${edition.lang}:${edition.id}`}
+                type="button"
+                aria-pressed={activeEdition?.lang === edition.lang}
+                onClick={() => setEditionLang(edition.lang)}
+              >
+                {edition.lang === 'pt' ? 'Português' : 'English'}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           type="search"
           placeholder="Buscar carta…"
