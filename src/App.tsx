@@ -15,7 +15,6 @@ import { BrowsePage } from './pages/Browse'
 import { BrowseSetPage } from './pages/BrowseSet'
 import { CollabBinderViewPage } from './pages/CollabBinderView'
 import { CollabJoinPage } from './pages/CollabJoinPage'
-import { DealCalculatorPage } from './pages/DealCalculator'
 import { DeckBuilderPage } from './pages/DeckBuilder'
 import { DecksPage } from './pages/Decks'
 import { FriendsPage } from './pages/Friends'
@@ -58,7 +57,6 @@ export default function App() {
                         />
                         <Route path="pesquisa" element={<BrowsePage />} />
                         <Route path="pesquisa/:setId" element={<BrowseSetPage />} />
-                        <Route path="calculadora" element={<DealCalculatorPage />} />
                         <Route path="decks" element={<DecksPage />} />
                         <Route path="decks/:id" element={<DeckBuilderPage />} />
                         <Route path="perfil" element={<MyProfilePage />} />
