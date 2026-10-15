@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { CardImage } from '../components/CardImage'
 import { ShareModal } from '../components/ShareModal'
 import { useAuth } from '../hooks/useAuth'
 import { useDecks } from '../hooks/useDecks'
@@ -96,21 +97,11 @@ export function DecksPage() {
         <div className="decks-hero-copy">
           <p className="decks-eyebrow">Pokémon TCG</p>
           <h1>Decks</h1>
-          <p>
-            Monte listas de 60 cartas com as regras oficiais: limite de 4 cópias, Energias
-            Básicas livres, 1 Radiant e 1 ACE SPEC. Cruze com o que você já tem no repositório.
-          </p>
-          <button type="button" className="btn primary" onClick={() => setModal({ mode: 'create' })}>
-            Novo deck
-          </button>
+          <p>Listas de 60 cartas. A arte de cada deck aparece no cartão.</p>
         </div>
-        <div className="decks-hero-art" aria-hidden>
-          <span className="orbit o1" />
-          <span className="orbit o2" />
-          <span className="hero-card c1" />
-          <span className="hero-card c2" />
-          <span className="hero-card c3" />
-        </div>
+        <button type="button" className="btn primary" onClick={() => setModal({ mode: 'create' })}>
+          Novo deck
+        </button>
       </header>
 
       {decks.length === 0 ? (
@@ -169,6 +160,22 @@ export function DecksPage() {
                   className="deck-open"
                   onClick={() => navigate(`/decks/${deck.id}`)}
                 >
+                  <div className="deck-cover" aria-hidden>
+                    {deck.cards.slice(0, 5).map((card) => (
+                      <span key={card.cardId} className="deck-cover-card">
+                        <CardImage
+                          src={card.image}
+                          alt=""
+                          quality="low"
+                          cardId={card.cardId}
+                          localId={card.localId}
+                          cardName={card.name}
+                          energyType={card.energyType ?? card.types?.[0]}
+                        />
+                      </span>
+                    ))}
+                    {deck.cards.length === 0 && <span className="deck-cover-empty">Deck vazio</span>}
+                  </div>
                   <div className="deck-card-top">
                     <span className={`legal-pill ${v.legal && v.complete ? 'ok' : 'bad'}`}>
                       {v.legal && v.complete ? 'Legal 60' : v.complete ? 'Inválido' : `${total}/60`}

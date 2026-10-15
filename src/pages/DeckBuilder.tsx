@@ -13,7 +13,7 @@ import { getCachedCard, hydrateCard, seedCardBrief } from '../api/prices'
 import { useDecks } from '../hooks/useDecks'
 import { useInventory } from '../hooks/useInventory'
 import { useLanguage } from '../hooks/useLanguage'
-import { sortedDeckCards } from '../lib/deckRules'
+import { deckCategory, sortedDeckCards } from '../lib/deckRules'
 import { ENERGY_TYPES, type DeckEntry } from '../types'
 import './DeckBuilder.css'
 
@@ -162,7 +162,7 @@ async function loadOwnedHit(
 export function DeckBuilderPage() {
   const { id = '' } = useParams()
   const { lang } = useLanguage()
-  const { getDeck, addCard, setCardQty, removeCard, clearDeck, renameDeck, updateNotes, validate } =
+  const { getDeck, addCard, adjustCardQty, removeCard, clearDeck, renameDeck, updateNotes, validate } =
     useDecks()
   const { getQty, hasCard, entries } = useInventory()
 
@@ -185,6 +185,8 @@ export function DeckBuilderPage() {
   const [notes, setNotes] = useState('')
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const [browsePreview, setBrowsePreview] = useState<DeckSearchHit | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const loadingRef = useRef(false)
 
@@ -287,6 +289,16 @@ export function DeckBuilderPage() {
       }
     }
 
+    const hasQuery = debouncedQuery.length > 0 || category !== '' || energyType !== ''
+    if (!hasQuery) {
+      setResults([])
+      setHasMore(false)
+      setError(null)
+      setLoading(false)
+      loadingRef.current = false
+      return
+    }
+
     loadingRef.current = true
     setLoading(true)
     setError(null)
@@ -368,7 +380,7 @@ export function DeckBuilderPage() {
       const entry: Omit<DeckEntry, 'qty'> = {
         cardId: card.id,
         name: meta?.name ?? card.name,
-        category: meta?.category ?? 'Pokemon',
+        category: deckCategory(meta?.category ?? card.category),
         types: meta?.types,
         stage: meta?.stage,
         rarity: meta?.rarity,
@@ -413,7 +425,11 @@ export function DeckBuilderPage() {
 
       const ok = addCard(deck.id, entry, 1)
       if (!ok) setError(`Limite de cópias atingido para “${entry.name}”.`)
-      else setError(null)
+      else {
+        setError(null)
+        setFocusId(card.id)
+        setBrowsePreview(null)
+      }
     } finally {
       setBusyId(null)
     }
@@ -428,11 +444,35 @@ export function DeckBuilderPage() {
     )
   }
 
+  const focused =
+    list.find((c) => c.cardId === focusId) ?? (browsePreview ? null : list[0] ?? null)
+  const stage = browsePreview
+    ? {
+        id: browsePreview.id,
+        name: browsePreview.name,
+        image: browsePreview.image,
+        localId: browsePreview.localId,
+        setName: undefined as string | undefined,
+        energyType: browsePreview.energyType,
+        qty: deck.cards.find((c) => c.cardId === browsePreview.id)?.qty ?? 0,
+      }
+    : focused
+      ? {
+          id: focused.cardId,
+          name: focused.name,
+          image: focused.image,
+          localId: focused.localId,
+          setName: focused.setName,
+          energyType: focused.energyType,
+          qty: focused.qty,
+        }
+      : null
+
   return (
     <div className="deck-builder">
-      <header className="db-top">
-        <Link to="/decks" className="back">
-          ← Decks
+      <header className="live-bar">
+        <Link to="/decks" className="live-back">
+          Decks
         </Link>
         {editingName ? (
           <form
@@ -447,6 +487,7 @@ export function DeckBuilderPage() {
               value={nameDraft}
               onChange={(e) => setNameDraft(e.target.value)}
               autoFocus
+              aria-label="Nome do deck"
               onBlur={() => {
                 renameDeck(deck.id, nameDraft)
                 setEditingName(false)
@@ -458,336 +499,276 @@ export function DeckBuilderPage() {
             <h1>{deck.name}</h1>
           </button>
         )}
-        <div className="db-top-stats">
-          <span className={`stat ${validation.complete ? 'ok' : ''}`}>
-            {validation.total}
-            <small>/60</small>
-          </span>
-          <span className={`stat ${validation.legal ? 'ok' : 'bad'}`}>
-            {validation.legal ? 'Regras OK' : 'Inválido'}
-          </span>
+        <div className="live-count" aria-label="Total de cartas">
+          <strong className={validation.complete ? 'ok' : ''}>{validation.total}</strong>
+          <span>/ 60</span>
         </div>
+        <span className={`live-legal ${validation.legal && validation.complete ? 'ok' : 'bad'}`}>
+          {validation.legal && validation.complete ? 'Legal' : 'Incompleto'}
+        </span>
       </header>
 
-      <section className="db-status" aria-label="Validação do deck">
-        <div className="status-meters">
-          <Meter label="Pokémon" value={validation.pokemon} tone="poke" />
-          <Meter label="Treinadores" value={validation.trainer} tone="train" />
-          <Meter label="Energias" value={validation.energy} tone="energy" />
-          <Meter
-            label="Tenho"
-            value={validation.ownedNeeded}
-            max={validation.total || 1}
-            tone="own"
-            suffix={` / ${validation.total}`}
-          />
-        </div>
-        <ul className="issue-list">
-          {validation.issues.length === 0 ? (
-            <li className="ok">Deck completo e dentro das regras básicas do TCG.</li>
-          ) : (
-            validation.issues.map((issue) => (
-              <li key={issue.code + issue.message} className={issue.severity}>
-                {issue.message}
-              </li>
-            ))
-          )}
-        </ul>
-      </section>
-
-      <div className="db-layout">
-        <div className="db-main">
-          <section className="db-filters" aria-label="Filtros de busca">
-            <div className="search-form">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Digite para filtrar (ex.: Charizard, Professor…)"
-                aria-label="Nome da carta"
-              />
-              {loading && <span className="search-live">Filtrando…</span>}
-            </div>
-
-            <div className="filter-block">
-              <p className="filter-label">Categoria</p>
-              <div className="chip-row">
-                {CATEGORIES.map((c) => (
-                  <button
-                    key={c.value || 'all'}
-                    type="button"
-                    className={category === c.value ? 'chip active' : 'chip'}
-                    onClick={() => setCategory(c.value)}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="filter-block">
-              <p className="filter-label">Tipo</p>
-              <div className="chip-row types">
-                <button
-                  type="button"
-                  className={!energyType ? 'chip active' : 'chip'}
-                  onClick={() => setEnergyType('')}
-                >
-                  Qualquer
-                </button>
-                {ENERGY_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className={energyType === t ? 'chip active' : 'chip'}
-                    style={{ ['--type' as string]: TYPE_COLORS[t] }}
-                    onClick={() => setEnergyType(t)}
-                  >
-                    <i className="type-dot" />
-                    {typeLabelPt(t)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="filter-block">
-              <p className="filter-label">Repositório</p>
-              <div className="chip-row">
-                {(
-                  [
-                    ['all', 'Todas'],
-                    ['owned', 'Que eu tenho'],
-                    ['missing', 'Que eu não tenho'],
-                  ] as const
-                ).map(([k, label]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    className={ownFilter === k ? 'chip active' : 'chip'}
-                    onClick={() => setOwnFilter(k)}
-                  >
+      <div className="live-stage">
+        <aside className="live-list" aria-label="Lista do deck">
+          <div className="live-list-scroll">
+            {(['Pokemon', 'Trainer', 'Energy'] as const).map((cat) => {
+              const cards = list.filter((c) => (normalizeDeckCategory(c.category) ?? 'Pokemon') === cat)
+              const count = cards.reduce((s, c) => s + c.qty, 0)
+              const label = cat === 'Pokemon' ? 'Pokémon' : cat === 'Trainer' ? 'Treinador' : 'Energia'
+              return (
+                <section key={cat} className="live-section">
+                  <h2>
                     {label}
-                  </button>
+                    <span>{count}</span>
+                  </h2>
+                  {cards.length === 0 ? (
+                    <p className="live-empty-row">Nenhuma</p>
+                  ) : (
+                    <ul>
+                      {cards.map((card) => {
+                        const owned = getQty(card.cardId)
+                        const short = Math.max(0, card.qty - owned)
+                        const type = card.types?.[0] ?? card.energyType
+                        const active = !browsePreview && stage?.id === card.cardId
+                        return (
+                          <li key={card.cardId}>
+                            <button
+                              type="button"
+                              className={`live-row ${active ? 'is-on' : ''} ${short > 0 ? 'is-short' : ''}`}
+                              style={{ ['--type' as string]: type ? TYPE_COLORS[type] : '#8b9bb4' }}
+                              onClick={() => {
+                                setBrowsePreview(null)
+                                setFocusId(card.cardId)
+                              }}
+                            >
+                              <span className="live-row-art">
+                                <CardImage
+                                  src={card.image}
+                                  alt=""
+                                  quality="low"
+                                  cardId={card.cardId}
+                                  localId={card.localId}
+                                  cardName={card.name}
+                                  energyType={
+                                    (normalizeDeckCategory(card.category) ?? 'Pokemon') === 'Energy'
+                                      ? card.energyType ?? type
+                                      : undefined
+                                  }
+                                />
+                              </span>
+                              <span className="live-row-name">
+                                {card.name}
+                                {[card.setId, short > 0 ? `faltam ${short}` : null].filter(Boolean).length > 0 && (
+                                  <em>
+                                    {[card.setId, short > 0 ? `faltam ${short}` : null]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </em>
+                                )}
+                              </span>
+                              <span className="live-row-qty">{card.qty}</span>
+                            </button>
+                            <span className="live-row-ctrl">
+                              <button
+                                type="button"
+                                aria-label={`Diminuir ${card.name}`}
+                                onClick={() => adjustCardQty(deck.id, card.cardId, -1)}
+                              >
+                                −
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Aumentar ${card.name}`}
+                                onClick={() => adjustCardQty(deck.id, card.cardId, 1)}
+                              >
+                                +
+                              </button>
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </section>
+              )
+            })}
+          </div>
+          <footer className="live-list-foot">
+            {validation.issues.length === 0 ? (
+              <p className="ok">60 cartas, dentro das regras.</p>
+            ) : (
+              <ul>
+                {validation.issues.slice(0, 3).map((issue) => (
+                  <li key={issue.code + issue.message}>{issue.message}</li>
                 ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="db-results" aria-label="Cartas encontradas">
-            <div className="results-head">
-              <h2>Cartas</h2>
-              <span>
-                {loading && results.length === 0
-                  ? 'Carregando…'
-                  : `${visibleCount} na grade${hasMore ? ' · role para mais' : ''}`}
-              </span>
-            </div>
-
-            {error && results.length === 0 && <p className="search-error">{error}</p>}
-
-            {loading && results.length === 0 && !error && (
-              <ResultRowSkeletonGrid count={8} />
+              </ul>
             )}
+            <div className="live-foot-actions">
+              <label className="notes">
+                Notas
+                <textarea
+                  value={notes}
+                  rows={2}
+                  placeholder="Arquétipo, formato…"
+                  onChange={(e) => setNotes(e.target.value)}
+                  onBlur={() => updateNotes(deck.id, notes)}
+                />
+              </label>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  if (window.confirm('Limpar todas as cartas deste deck?')) clearDeck(deck.id)
+                }}
+              >
+                Limpar deck
+              </button>
+            </div>
+          </footer>
+        </aside>
 
-            <div className="result-grid">
-              {results
-                .filter((card) => matchesOwnFilter(card.id, ownFilter, hasCard))
-                .map((card) => {
-                  const owned = getQty(card.id)
-                  const inDeck = deck.cards.find((c) => c.cardId === card.id)?.qty ?? 0
-                  return (
-                    <article
-                      key={card.id}
-                      className={`result-card is-in ${owned > 0 ? 'owned' : 'missing'}`}
+        <section className="live-preview" aria-label="Carta selecionada">
+          {stage ? (
+            <>
+              <div className="live-preview-art">
+                <CardImage
+                  src={stage.image}
+                  alt={stage.name}
+                  quality="high"
+                  cardId={stage.id}
+                  localId={stage.localId}
+                  cardName={stage.name}
+                  energyType={stage.energyType}
+                />
+              </div>
+              <div className="live-preview-meta">
+                <h2>{stage.name}</h2>
+                <p>
+                  {stage.setName ? `${stage.setName} · ` : ''}#{stage.localId ?? '—'}
+                  {stage.qty > 0 ? ` · ${stage.qty} no deck` : ''}
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="live-preview-empty">Escolha uma carta na busca para ver a arte.</p>
+          )}
+        </section>
+
+        <section className="live-catalog" aria-label="Buscar cartas">
+          <input
+            className="live-search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar carta"
+            aria-label="Nome da carta"
+          />
+          <div className="chip-row">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.value || 'all'}
+                type="button"
+                className={category === c.value ? 'chip active' : 'chip'}
+                onClick={() => setCategory(c.value)}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <div className="type-rail" role="group" aria-label="Tipo">
+            <button
+              type="button"
+              className={!energyType ? 'type-orb on' : 'type-orb'}
+              onClick={() => setEnergyType('')}
+              aria-label="Qualquer tipo"
+            >
+              *
+            </button>
+            {ENERGY_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={energyType === t ? 'type-orb on' : 'type-orb'}
+                style={{ ['--type' as string]: TYPE_COLORS[t] }}
+                aria-label={typeLabelPt(t)}
+                aria-pressed={energyType === t}
+                onClick={() => setEnergyType(t)}
+              />
+            ))}
+          </div>
+          <div className="chip-row">
+            {(
+              [
+                ['all', 'Todas'],
+                ['owned', 'Tenho'],
+                ['missing', 'Não tenho'],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                className={ownFilter === k ? 'chip active' : 'chip'}
+                onClick={() => setOwnFilter(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {!debouncedQuery && !category && !energyType && ownFilter === 'all' && (
+            <p className="search-error">Busque pelo nome, por exemplo Dragapult, Dreepy ou Doce Raro.</p>
+          )}
+          {error && results.length === 0 && <p className="search-error">{error}</p>}
+          {loading && results.length === 0 && !error && <ResultRowSkeletonGrid count={6} />}
+
+          <div className="live-results">
+            {results
+              .filter((card) => matchesOwnFilter(card.id, ownFilter, hasCard))
+              .map((card) => {
+                const inDeck = deck.cards.find((c) => c.cardId === card.id)?.qty ?? 0
+                return (
+                  <article key={card.id} className={`live-hit ${inDeck > 0 ? 'in-deck' : ''}`}>
+                    <button
+                      type="button"
+                      className="live-hit-art"
+                      onClick={() => {
+                        setBrowsePreview(card)
+                        setFocusId(null)
+                      }}
+                      aria-label={`Ver ${card.name}`}
                     >
-                      <div className="thumb">
-                        <CardImage
-                          src={card.image}
-                          alt={card.name}
-                          quality="low"
-                          cardId={card.id}
-                          localId={card.localId}
-                          cardName={card.name}
-                          energyType={card.energyType}
-                        />
-                        <span className={`own-badge ${owned > 0 ? 'yes' : 'no'}`}>
-                          {owned > 0 ? `Tenho ×${owned}` : 'Não tenho'}
-                        </span>
-                      </div>
-                      <div className="info">
-                        <strong>{card.name}</strong>
-                        <span>#{card.localId}</span>
-                        {inDeck > 0 && <em>No deck: {inDeck}</em>}
-                      </div>
+                      <CardImage
+                        src={card.image}
+                        alt={card.name}
+                        quality="low"
+                        cardId={card.id}
+                        localId={card.localId}
+                        cardName={card.name}
+                        energyType={card.energyType}
+                      />
+                      {inDeck > 0 && <span className="hit-qty">{inDeck}</span>}
+                    </button>
                       <button
                         type="button"
-                        className="add-btn"
+                        className="hit-add"
                         disabled={busyId === card.id}
                         onClick={() => onAdd(card)}
                       >
-                        {busyId === card.id ? '…' : '+ Adicionar'}
+                        {busyId === card.id ? '…' : 'Adicionar'}
                       </button>
-                    </article>
-                  )
-                })}
-            </div>
-
-            <div ref={sentinelRef} className="scroll-sentinel" aria-hidden />
-            {loading && results.length > 0 && (
-              <p className="scroll-loading">Carregando mais cartas…</p>
-            )}
-            {!hasMore && results.length > 0 && (
-              <p className="scroll-end">Fim dos resultados</p>
-            )}
-          </section>
-        </div>
-
-        <aside className="db-list" aria-label="Deck em cartas">
-          <div className="list-head">
-            <h2>Seu deck ({validation.total}/60)</h2>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => {
-                if (window.confirm('Limpar todas as cartas deste deck?')) clearDeck(deck.id)
-              }}
-            >
-              Limpar
-            </button>
+                      <span className="hit-meta">
+                        {card.setId ?? '—'} · #{card.localId}
+                        {card.regulationMark ? ` · ${card.regulationMark}` : ''}
+                      </span>
+                  </article>
+                )
+              })}
           </div>
-
-          <label className="notes">
-            Notas
-            <textarea
-              value={notes}
-              rows={2}
-              placeholder="Arquétipo, estratégia, formato…"
-              onChange={(e) => setNotes(e.target.value)}
-              onBlur={() => updateNotes(deck.id, notes)}
-            />
-          </label>
-
-          <div className="deck-sections">
-            {(['Pokemon', 'Trainer', 'Energy'] as const).map((cat) => {
-              const cards = list.filter((c) => c.category === cat)
-              if (cards.length === 0) return null
-              return (
-                <div key={cat} className="deck-section">
-                  <h3>
-                    {cat === 'Pokemon' ? 'Pokémon' : cat === 'Trainer' ? 'Treinadores' : 'Energias'}
-                    <span>{cards.reduce((s, c) => s + c.qty, 0)}</span>
-                  </h3>
-                  <div className="deck-card-grid">
-                    {cards.map((card) => {
-                      const owned = getQty(card.cardId)
-                      const short = Math.max(0, card.qty - owned)
-                      return (
-                        <article
-                          key={card.cardId}
-                          className={`deck-tile ${short > 0 ? 'is-short' : 'is-ok'}`}
-                        >
-                          <div className="deck-tile-art">
-                            <CardImage
-                              src={card.image}
-                              alt={card.name}
-                              quality="high"
-                              cardId={card.cardId}
-                              localId={card.localId}
-                              cardName={card.name}
-                              energyType={card.energyType}
-                            />
-                            <span className="qty-badge">{card.qty}×</span>
-                            <span className={`own-tag ${short > 0 ? 'miss' : 'ok'}`}>
-                              {short > 0 ? `Faltam ${short}` : 'Tenho'}
-                            </span>
-                          </div>
-                          <div className="deck-tile-meta">
-                            <strong>{card.name}</strong>
-                            <span>
-                              {card.setName ?? '—'}
-                              {card.isBasicEnergy ? ' · Básica' : ''}
-                              {card.isRadiant ? ' · Radiant' : ''}
-                              {card.isAceSpec ? ' · ACE SPEC' : ''}
-                            </span>
-                          </div>
-                          <div className="deck-tile-ctrl">
-                            <button
-                              type="button"
-                              aria-label="Diminuir"
-                              onClick={() => setCardQty(deck.id, card, card.qty - 1)}
-                            >
-                              −
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Aumentar"
-                              onClick={() => setCardQty(deck.id, card, card.qty + 1)}
-                            >
-                              +
-                            </button>
-                            <button
-                              type="button"
-                              className="x"
-                              aria-label="Remover"
-                              onClick={() => removeCard(deck.id, card.cardId)}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </article>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-            {list.length === 0 && (
-              <p className="empty-list">
-                Adicione cartas da grade ao lado — elas aparecem aqui como fichas.
-              </p>
-            )}
-          </div>
-
-          <div className="rules-help">
-            <h3>Regras aplicadas</h3>
-            <ul>
-              <li>Exatamente 60 cartas</li>
-              <li>Máx. 4 cópias do mesmo nome (exceto Energia Básica)</li>
-              <li>Pelo menos 1 Pokémon Básico</li>
-              <li>Máx. 1 Pokémon Radiant / Radiante</li>
-              <li>Máx. 1 carta ACE SPEC</li>
-            </ul>
-          </div>
-        </aside>
-      </div>
-    </div>
-  )
-}
-
-function Meter({
-  label,
-  value,
-  max = 60,
-  tone,
-  suffix,
-}: {
-  label: string
-  value: number
-  max?: number
-  tone: string
-  suffix?: string
-}) {
-  const pct = Math.min(100, Math.round((value / max) * 100))
-  return (
-    <div className={`meter ${tone}`}>
-      <div className="meter-top">
-        <span>{label}</span>
-        <strong>
-          {value}
-          {suffix ?? ''}
-        </strong>
-      </div>
-      <div className="meter-bar">
-        <i style={{ width: `${pct}%` }} />
+          <div ref={sentinelRef} className="scroll-sentinel" aria-hidden />
+          {loading && results.length > 0 && <p className="scroll-loading">Carregando…</p>}
+          <p className="live-results-count">
+            {loading && results.length === 0 ? 'Carregando…' : `${visibleCount} cartas`}
+          </p>
+        </section>
       </div>
     </div>
   )

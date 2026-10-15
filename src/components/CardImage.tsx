@@ -5,7 +5,12 @@ import {
   imageCacheKey,
   setCachedImageUrl,
 } from '../api/imageCache'
-import { cardImageCandidates, inferMissingImageCandidates, isLegacyCatalogImage } from '../api/images/imageProvider'
+import {
+  cardImageCandidates,
+  inferMissingImageCandidates,
+  isLegacyCatalogImage,
+  isPokemonTcgCardBack,
+} from '../api/images/imageProvider'
 import './Skeleton.css'
 
 /** Browser-cached images can finish before React attaches onLoad; complete stays true. */
@@ -126,6 +131,11 @@ export function CardImage({
     setLoaded(false)
     const img = imgRef.current
     if (isImgReady(img) && current) {
+      if (isPokemonTcgCardBack(current, img.naturalWidth, img.naturalHeight)) {
+        clearCachedImageUrl(cacheKey, current)
+        setIndex((i) => i + 1)
+        return
+      }
       setLoaded(true)
       setCachedImageUrl(cacheKey, current)
     }
@@ -162,6 +172,14 @@ export function CardImage({
         draggable={draggable}
         onLoad={(e) => {
           if (!isImgReady(e.currentTarget)) return
+          if (intendedRef.current !== current) return
+          if (isPokemonTcgCardBack(current, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)) {
+            clearCachedImageUrl(cacheKey, current)
+            setLoaded(false)
+            if (index + 1 < candidates.length) setIndex(index + 1)
+            else setExhausted(true)
+            return
+          }
           setLoaded(true)
           setCachedImageUrl(cacheKey, current)
         }}

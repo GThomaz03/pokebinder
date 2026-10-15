@@ -11,6 +11,9 @@ export function isLegacyCatalogImage(url: string | undefined | null): boolean {
   // PokémonTCG.io has no art for these id shapes and may 404 or substitute a back.
   if (/images\.pokemontcg\.io\/(me0\d|sv0\d)/i.test(url)) return true
   if (/images\.pokemontcg\.io\/[^/]*\d\.\d\//i.test(url)) return true
+  // TCGdex McDonald's ids (`2011bw`) are not PokémonTCG.io set folders.
+  // That host answers them with the card back.
+  if (/images\.pokemontcg\.io\/(?:19|20)\d{2}[a-z0-9]*\//i.test(url)) return true
 
   // Scrydex answers unknown ids with HTTP 200 and the Pokémon card back.
   // `sv07-001` is that placeholder; the hosted file is the normalized `sv7-1`.
@@ -20,6 +23,15 @@ export function isLegacyCatalogImage(url: string | undefined | null): boolean {
   }
 
   return false
+}
+
+/**
+ * PokémonTCG.io and Scrydex answer a missing file with the card back at 640×892.
+ * Real scans from those hosts are 245px or about 734px wide.
+ */
+export function isPokemonTcgCardBack(url: string, width: number, height: number): boolean {
+  if (width !== 640 || height !== 892) return false
+  return /images\.pokemontcg\.io|images\.scrydex\.com/i.test(url)
 }
 
 /** Scarlet & Violet Energy (sve) basic prints — reliable art for nameless TCGdex energies. */
@@ -151,7 +163,11 @@ export function canonicalizeTcgdexSetId(setId: string): string {
 }
 
 export function toPokemonTcgIoSetId(setId: string): string {
-  return normalizeCatalogSetId(setId)
+  const normalized = normalizeCatalogSetId(setId)
+  // TCGdex: 2011bw, 2014xy, 2021swsh. PokémonTCG.io: mcd11, mcd14, mcd21.
+  const mcdonalds = /^(?:19|20)(\d{2})/.exec(normalized)
+  if (mcdonalds) return `mcd${mcdonalds[1]}`
+  return normalized
 }
 
 const IMAGE_FILE_RE = /\.(webp|png|jpg|jpeg)(\?.*)?$/i
@@ -319,8 +335,12 @@ export function inferMissingImageCandidates(opts: {
   const catalogSetId = catalogDash > 0 ? catalogId.slice(0, catalogDash) : normalizeCatalogSetId(setId)
   const localIds = [...new Set([raw, stripped, catalogNum].filter(Boolean))]
   const ioBase = API_CONFIG.pokemonTcgIo.imagesBaseUrl
-  const typeKey = detectBasicEnergyTypeKey(opts.name, opts.energyType)
-  const isEnergySet = ENERGY_SET_IDS.has(setId.toLowerCase()) || Boolean(typeKey)
+  const namedEnergy = /energy|energia/i.test(opts.name ?? '')
+  const inEnergySet = ENERGY_SET_IDS.has(setId.toLowerCase())
+  // A Pokémon's type (Grass, Fire…) must not steal the basic-energy illustration.
+  const typeKey =
+    namedEnergy || inEnergySet ? detectBasicEnergyTypeKey(opts.name, opts.energyType) : null
+  const isEnergySet = inEnergySet || Boolean(typeKey)
 
   if (typeKey) {
     const n = BASIC_ENERGY_SVE_INDEX[typeKey]

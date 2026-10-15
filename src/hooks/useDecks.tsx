@@ -10,6 +10,8 @@ import {
 import { uid } from '../lib/binderUtils'
 import {
   copiesOfName,
+  DECK_SIZE,
+  deckTotal,
   maxAllowedForEntry,
   validateDeck,
   type DeckValidation,
@@ -31,6 +33,7 @@ type DecksContextValue = {
   updateNotes: (id: string, notes: string) => void
   deleteDeck: (id: string) => void
   setCardQty: (deckId: string, entry: DeckEntry, qty: number) => void
+  adjustCardQty: (deckId: string, cardId: string, delta: number) => void
   addCard: (deckId: string, entry: Omit<DeckEntry, 'qty'>, qty?: number) => boolean
   removeCard: (deckId: string, cardId: string) => void
   clearDeck: (deckId: string) => void
@@ -134,6 +137,25 @@ export function DecksProvider({ children }: { children: ReactNode }) {
     [update],
   )
 
+  const adjustCardQty = useCallback(
+    (deckId: string, cardId: string, delta: number) => {
+      update(deckId, (d) => {
+        const card = d.cards.find((c) => c.cardId === cardId)
+        if (!card) return d
+        const others = copiesOfName(d, card.name) - card.qty
+        const max = maxAllowedForEntry(card)
+        const slots = DECK_SIZE - (deckTotal(d) - card.qty)
+        const capped = Math.max(0, Math.min(card.qty + delta, max - others, slots))
+        if (capped <= 0) return { ...d, cards: d.cards.filter((c) => c.cardId !== cardId) }
+        return {
+          ...d,
+          cards: d.cards.map((c) => (c.cardId === cardId ? { ...c, qty: capped } : c)),
+        }
+      })
+    },
+    [update],
+  )
+
   const addCard = useCallback(
     (deckId: string, entry: Omit<DeckEntry, 'qty'>, qty = 1): boolean => {
       let ok = true
@@ -142,11 +164,12 @@ export function DecksProvider({ children }: { children: ReactNode }) {
         const currentName = copiesOfName(d, entry.name)
         const existing = d.cards.find((c) => c.cardId === entry.cardId)
         const room = max - (currentName - (existing?.qty ?? 0))
-        if (room <= 0) {
+        const slots = DECK_SIZE - deckTotal(d)
+        if (room <= 0 || slots <= 0) {
           ok = false
           return d
         }
-        const add = Math.min(qty, room)
+        const add = Math.min(qty, room, slots)
         if (existing) {
           return {
             ...d,
@@ -197,6 +220,7 @@ export function DecksProvider({ children }: { children: ReactNode }) {
       updateNotes,
       deleteDeck,
       setCardQty,
+      adjustCardQty,
       addCard,
       removeCard,
       clearDeck,
@@ -210,6 +234,7 @@ export function DecksProvider({ children }: { children: ReactNode }) {
       updateNotes,
       deleteDeck,
       setCardQty,
+      adjustCardQty,
       addCard,
       removeCard,
       clearDeck,

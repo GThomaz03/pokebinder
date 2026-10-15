@@ -26,9 +26,16 @@ export function deckTotal(deck: Deck): number {
   return deck.cards.reduce((s, c) => s + c.qty, 0)
 }
 
+export function deckCategory(raw?: string): DeckCategory {
+  const s = String(raw ?? '')
+  if (s === 'Trainer' || s === 'Treinador') return 'Trainer'
+  if (s === 'Energy' || s === 'Energia') return 'Energy'
+  return 'Pokemon'
+}
+
 export function countByCategory(deck: Deck): Record<DeckCategory, number> {
   const out: Record<DeckCategory, number> = { Pokemon: 0, Trainer: 0, Energy: 0 }
-  for (const c of deck.cards) out[c.category] += c.qty
+  for (const c of deck.cards) out[deckCategory(c.category)] += c.qty
   return out
 }
 
@@ -88,8 +95,8 @@ export function validateDeck(
       severity: 'error',
       message:
         total < DECK_SIZE
-          ? `Faltam ${DECK_SIZE - total} carta(s) para chegar a 60.`
-          : `O deck tem ${total - DECK_SIZE} carta(s) a mais (máx. 60).`,
+          ? `Faltam ${DECK_SIZE - total} ${DECK_SIZE - total === 1 ? 'carta' : 'cartas'} para chegar a 60.`
+          : `O deck tem ${total - DECK_SIZE} ${total - DECK_SIZE === 1 ? 'carta' : 'cartas'} a mais (máx. 60).`,
     })
   }
 
@@ -135,7 +142,7 @@ export function validateDeck(
     issues.push({
       code: 'format-standard',
       severity: 'warn',
-      message: `${nonStandard} carta(s) não estão legais no formato Standard (TCGdex).`,
+      message: `${nonStandard} ${nonStandard === 1 ? 'carta não está legal' : 'cartas não estão legais'} no formato Standard.`,
     })
   }
 
@@ -152,7 +159,7 @@ export function validateDeck(
     issues.push({
       code: 'ownership',
       severity: 'warn',
-      message: `Você não tem ${missingNeeded} cópia(s) deste deck no repositório.`,
+      message: `Faltam ${missingNeeded} ${missingNeeded === 1 ? 'cópia' : 'cópias'} no repositório.`,
     })
   }
 
@@ -192,10 +199,9 @@ export function detectBasicEnergy(opts: {
   name: string
   effect?: string
 }): boolean {
-  if (opts.category !== 'Energy') return false
-  if (opts.energyType && /special/i.test(opts.energyType)) return false
-  if (opts.energyType && /(normal|basic)/i.test(opts.energyType)) return true
-  // Fallback: basic energies rarely have long rules text
+  if (opts.category !== 'Energy' && opts.category !== 'Energia') return false
+  if (opts.energyType && /special|especial/i.test(opts.energyType)) return false
+  if (opts.energyType && /(normal|basic|básic|basico)/i.test(opts.energyType)) return true
   if (opts.effect && opts.effect.trim().length > 40) return false
   return /energy|energia/i.test(opts.name)
 }
@@ -203,7 +209,7 @@ export function detectBasicEnergy(opts: {
 export function sortedDeckCards(cards: DeckEntry[]): DeckEntry[] {
   const order: Record<DeckCategory, number> = { Pokemon: 0, Trainer: 1, Energy: 2 }
   return [...cards].sort((a, b) => {
-    const ca = order[a.category] - order[b.category]
+    const ca = order[deckCategory(a.category)] - order[deckCategory(b.category)]
     if (ca !== 0) return ca
     return a.name.localeCompare(b.name, 'pt-BR')
   })

@@ -4,17 +4,15 @@
 }
 
 .decks-hero {
-  display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 1.5rem;
-  align-items: stretch;
-  padding: clamp(1.4rem, 3.5vw, 2.4rem);
-  border-radius: var(--radius-page);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 214, 90, 0.18);
+  background: linear-gradient(180deg, #1a2740 0%, #10192b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .decks-eyebrow {
@@ -36,74 +34,6 @@
   color: var(--muted);
 }
 
-.decks-hero-art {
-  position: relative;
-  min-height: 180px;
-}
-
-.orbit {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.orbit.o1 {
-  width: 160px;
-  height: 160px;
-  right: 18%;
-  top: 10%;
-}
-
-.orbit.o2 {
-  width: 220px;
-  height: 220px;
-  right: 4%;
-  top: -8%;
-  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
-}
-
-.hero-card {
-  position: absolute;
-  width: 72px;
-  aspect-ratio: 63 / 88;
-  border-radius: var(--slot-radius);
-  border: 1px solid var(--border-strong);
-  background: linear-gradient(160deg, var(--surface-2), var(--slot) 70%);
-  box-shadow: var(--shadow);
-  animation: float-card 5s ease-in-out infinite;
-}
-
-.hero-card.c1 {
-  right: 42%;
-  top: 28%;
-  transform: rotate(-12deg);
-}
-
-.hero-card.c2 {
-  right: 22%;
-  top: 18%;
-  transform: rotate(6deg);
-  animation-delay: 0.4s;
-  background: linear-gradient(160deg, #3a2a12, var(--slot) 70%);
-}
-
-.hero-card.c3 {
-  right: 8%;
-  top: 36%;
-  transform: rotate(14deg);
-  animation-delay: 0.8s;
-  background: linear-gradient(160deg, #1a2f4a, var(--slot) 70%);
-}
-
-@keyframes float-card {
-  0%,
-  100% {
-    translate: 0 0;
-  }
-  50% {
-    translate: 0 -8px;
-  }
-}
 
 .btn {
   appearance: none;
@@ -270,6 +200,42 @@
   color: var(--danger);
 }
 
+.deck-cover {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  min-height: 92px;
+  margin: -0.15rem -0.15rem 0.35rem;
+  padding: 0.7rem 0.7rem 0.35rem;
+  background:
+    radial-gradient(ellipse at 20% 120%, rgba(255, 214, 90, 0.16), transparent 55%),
+    linear-gradient(180deg, #121c2e, #0c1422);
+  border-radius: 12px 12px 0 0;
+}
+
+.deck-cover-card {
+  width: 52px;
+  aspect-ratio: 63 / 88;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+  background: #070d16;
+}
+
+.deck-cover-card img,
+.deck-cover-card .card-img-root {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.deck-cover-empty {
+  color: #8ea0b8;
+  font-size: 0.8rem;
+  align-self: center;
+}
+
 .deck-card-top {
   display: flex;
   flex-wrap: wrap;
@@ -399,16 +365,7 @@
 
 @media (max-width: 800px) {
   .decks-hero {
-    grid-template-columns: 1fr;
-  }
-
-  .decks-hero-art {
-    min-height: 120px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hero-card {
-    animation: none;
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

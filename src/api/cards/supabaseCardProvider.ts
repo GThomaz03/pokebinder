@@ -1,3 +1,4 @@
+import { detectBasicEnergy } from '../../lib/deckRules'
 import type { CardLang } from '../../types'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { catalogCardIdCandidates, baseCardId } from '../cardKeys'
@@ -330,18 +331,26 @@ async function searchByName(
   if (!supabase) return []
   const from = (page - 1) * pageSize
   const needed = from + pageSize
-  let cardsQuery = supabase.from('cards').select(CARD_SELECT).ilike('name', `%${text}%`)
+  let cardsQuery = supabase
+    .from('cards')
+    .select(CARD_SELECT)
+    .ilike('name', `%${text}%`)
+    .in('language', dbLanguageValues(lang))
   if (opts.category) cardsQuery = cardsQuery.in('category', categoryAliases(opts.category))
   if (opts.type) cardsQuery = cardsQuery.overlaps('types', typeAliases(opts.type))
 
   const [cardsRes, translationsRes] = await Promise.all([
-    cardsQuery.order('canonical_id', { ascending: true }).range(0, needed),
+    cardsQuery
+      .order('regulation_mark', { ascending: false, nullsFirst: false })
+      .order('canonical_id', { ascending: true })
+      .range(0, needed),
     supabase
       .from('card_translations')
       .select(
         'name, language, cards!inner(canonical_id, name, number, image_low_url, image_high_url, image_url, category, types, stage, rarity, trainer_type, energy_type, regulation_mark, hp, sets(source_id, name))',
       )
       .ilike('name', `%${text}%`)
+      .in('language', dbLanguageValues(lang))
       .limit((needed + 1) * 3),
   ])
   if (cardsRes.error) throw new Error(cardsRes.error.message)
@@ -364,9 +373,21 @@ async function searchByName(
     if (preferred) existing.name = preferred
   }
 
-  return [...byId.values()]
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .slice(from, from + pageSize)
+  return [...byId.values()].sort(compareDeckHits).slice(from, from + pageSize)
+}
+
+/** Newer regulation marks (H, I, J) first, so a deck search starts in the current format. */
+function compareDeckHits(a: DeckSearchHit, b: DeckSearchHit): number {
+  const rank = (hit: DeckSearchHit) => {
+    const letter = (hit.regulationMark ?? '').trim().toUpperCase()
+    const index = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.indexOf(letter)
+    let score = index < 0 ? 0 : (index + 1) * 10
+    const setId = (hit.setId ?? hit.id.split('-')[0] ?? '').toLowerCase()
+    if (setId === 'sve') score += 6
+    if (setId === 'mee') score += 5
+    return score
+  }
+  return rank(b) - rank(a) || a.name.localeCompare(b.name, 'pt-BR') || a.id.localeCompare(b.id)
 }
 
 async function querySearchView(
@@ -379,18 +400,19 @@ async function querySearchView(
   if (opts.text) return searchByName(lang, opts.text, opts, page, pageSize)
 
   const from = (page - 1) * pageSize
-  let builder = supabase.from('cards').select(CARD_SELECT)
+  let builder = supabase.from('cards').select(CARD_SELECT).in('language', dbLanguageValues(lang))
   if (opts.numbers?.length) builder = builder.in('number', opts.numbers)
   if (opts.category) builder = builder.in('category', categoryAliases(opts.category))
   if (opts.type) builder = builder.overlaps('types', typeAliases(opts.type))
 
   const { data, error } = await builder
+    .order('regulation_mark', { ascending: false, nullsFirst: false })
     .order('canonical_id', { ascending: true })
     .range(from, from + pageSize - 1)
   if (error) throw new Error(error.message)
   const rows = (data ?? []).map(asDbCard)
   const trs = await fetchTranslation(rows.map((row) => row.canonical_id), lang)
-  return rows.map((row) => hitFromCard(row, lang, trs.get(row.canonical_id)?.name))
+  return rows.map((row) => hitFromCard(row, lang, trs.get(row.canonical_id)?.name)).sort(compareDeckHits)
 }
 
 /** One round trip per page of sets. Used by the collection browser. */
@@ -560,12 +582,12 @@ export const supabaseCardProvider: CardProvider = {
           ? 'Energy'
           : 'Pokemon'
     const name = card.name
-    const energyLower = card.energyType?.toLowerCase() ?? ''
-    const isBasicEnergy =
-      category === 'Energy' &&
-      (energyLower === 'normal' ||
-        energyLower === 'basic' ||
-        /energy|energia/i.test(name))
+    const isBasicEnergy = detectBasicEnergy({
+      category,
+      energyType: card.energyType,
+      name,
+      effect: card.effect,
+    })
     return {
       cardId: card.id,
       name,
