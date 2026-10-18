@@ -162,7 +162,7 @@ async function loadOwnedHit(
 export function DeckBuilderPage() {
   const { id = '' } = useParams()
   const { lang } = useLanguage()
-  const { getDeck, addCard, adjustCardQty, removeCard, clearDeck, renameDeck, updateNotes, validate } =
+  const { getDeck, addCard, adjustCardQty, clearDeck, renameDeck, updateNotes, validate } =
     useDecks()
   const { getQty, hasCard, entries } = useInventory()
 

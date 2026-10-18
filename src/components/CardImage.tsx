@@ -130,7 +130,7 @@ export function CardImage({
   useLayoutEffect(() => {
     setLoaded(false)
     const img = imgRef.current
-    if (isImgReady(img) && current) {
+    if (img && isImgReady(img) && current) {
       if (isPokemonTcgCardBack(current, img.naturalWidth, img.naturalHeight)) {
         clearCachedImageUrl(cacheKey, current)
         setIndex((i) => i + 1)
