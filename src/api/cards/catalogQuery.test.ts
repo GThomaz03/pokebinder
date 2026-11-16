@@ -12,6 +12,7 @@ import {
   sanitizeSearchTerm,
   setIdFromCanonicalId,
   setSourceIdCandidates,
+  speciesNameMatches,
   typeAliases,
 } from './catalogQuery'
 
@@ -82,6 +83,12 @@ describe('catalog filters', () => {
     expect(numberSearchVariants('009/094')).toEqual(['009', '9'])
     expect(numberSearchVariants('#025')).toEqual(['025', '25'])
     expect(numberSearchVariants('Pikachu')).toEqual([])
+  })
+
+  it('matches a species inside a Mega or ex name without matching a longer species', () => {
+    expect(speciesNameMatches('Azurill', 'Azurill')).toBe(true)
+    expect(speciesNameMatches('Mega Golisopod ex', 'Golisopod')).toBe(true)
+    expect(speciesNameMatches('Mewtwo', 'Mew')).toBe(false)
   })
 
   it('removes characters that would split a PostgREST filter', () => {

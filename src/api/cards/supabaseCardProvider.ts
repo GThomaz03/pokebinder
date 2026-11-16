@@ -13,6 +13,7 @@ import {
   printingLanguage,
   sanitizeSearchTerm,
   setSourceIdCandidates,
+  speciesNameMatches,
   typeAliases,
 } from './catalogQuery'
 import type {
@@ -540,35 +541,49 @@ export const supabaseCardProvider: CardProvider = {
 
   async fetchSpeciesVariants(lang, dexId, speciesName) {
     if (!supabase) return []
-    const rows: DbCard[] = []
-    for (let from = 0; ; from += CATALOG_FETCH_PAGE_SIZE) {
-      const { data, error } = await supabase
-        .from('cards')
-        .select(CARD_SELECT)
-        .contains('national_pokedex_numbers', [dexId])
-        .in('language', dbLanguageValues(lang))
-        .order('canonical_id', { ascending: true })
-        .range(from, from + CATALOG_FETCH_PAGE_SIZE - 1)
-      if (error) throw new Error(error.message)
-      const pageRows = (data ?? []).map(asDbCard)
-      rows.push(...pageRows)
-      if (pageRows.length < CATALOG_FETCH_PAGE_SIZE) break
+    const token = sanitizeSearchTerm(speciesName)
+    const dexRows: DbCard[] = []
+    const nameRows: DbCard[] = []
+
+    const dexPages = (async () => {
+      for (let from = 0; ; from += CATALOG_FETCH_PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('cards')
+          .select(CARD_SELECT)
+          .contains('national_pokedex_numbers', [dexId])
+          .in('language', dbLanguageValues(lang))
+          .order('canonical_id', { ascending: true })
+          .range(from, from + CATALOG_FETCH_PAGE_SIZE - 1)
+        if (error) throw new Error(error.message)
+        const pageRows = (data ?? []).map(asDbCard)
+        dexRows.push(...pageRows)
+        if (pageRows.length < CATALOG_FETCH_PAGE_SIZE) break
+      }
+    })()
+
+    const namePage = token
+      ? supabase
+          .from('cards')
+          .select(CARD_SELECT)
+          .ilike('name', `%${token}%`)
+          .in('language', dbLanguageValues(lang))
+          .order('canonical_id', { ascending: true })
+          .limit(CATALOG_FETCH_PAGE_SIZE)
+      : Promise.resolve({ data: [], error: null })
+
+    const [, nameResult] = await Promise.all([dexPages, namePage])
+    if (nameResult.error) throw new Error(nameResult.error.message)
+    nameRows.push(...(nameResult.data ?? []).map(asDbCard))
+
+    const byId = new Map(dexRows.map((row) => [row.canonical_id, row]))
+    for (const row of nameRows) {
+      if (byId.has(row.canonical_id)) continue
+      const dex = row.national_pokedex_numbers ?? []
+      if (dex.length > 0 && !dex.includes(dexId)) continue
+      if (!speciesNameMatches(row.name, speciesName)) continue
+      byId.set(row.canonical_id, row)
     }
-
-    if (rows.length) return mapVariants(rows, lang)
-
-    const token = speciesName.split(' ')[0]?.trim()
-    if (!token) return []
-    const { data: byName, error: nameError } = await supabase
-      .from('cards')
-      .select(CARD_SELECT)
-      .ilike('name', `%${sanitizeSearchTerm(token)}%`)
-      .in('language', dbLanguageValues(lang))
-      .order('canonical_id', { ascending: true })
-      .limit(CATALOG_FETCH_PAGE_SIZE)
-    if (nameError) throw new Error(nameError.message)
-    if (!byName?.length) return []
-    return mapVariants(byName.map(asDbCard), lang)
+    return mapVariants([...byId.values()], lang)
   },
 
   async fetchDeckCardMeta(lang, cardId) {

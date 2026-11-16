@@ -107,3 +107,13 @@ export function numberSearchVariants(raw: string): string[] {
   const stripped = token.replace(/^0+(?=\d)/, '')
   return [...new Set([token, stripped])]
 }
+
+/** Whole-word species match: Azurill, Mega Golisopod ex. Mew does not match Mewtwo. */
+export function speciesNameMatches(cardName: string, speciesName: string): boolean {
+  const card = cardName.toLowerCase().trim()
+  const species = speciesName.toLowerCase().trim()
+  if (!species || !card) return false
+  if (card === species) return true
+  const escaped = species.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:[^a-z0-9]|$)`, 'i').test(card)
+}

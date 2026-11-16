@@ -99,6 +99,7 @@ export class CatalogWriter {
     if (errors.length) throw new Error(`Invalid card ${card.canonicalId}: ${errors.join(', ')}`)
 
     const setUuid = await this.ensureSet(card.setSourceId)
+    const dexIds = card.dexIds.length > 0 ? card.dexIds : await this.inferDexIds(card.name)
     const { data: existing } = await this.db
       .from('cards')
       .select('id')
@@ -118,7 +119,7 @@ export class CatalogWriter {
       rarity: card.rarity ?? null,
       artist: card.artist ?? null,
       flavor_text: card.effect ?? null,
-      national_pokedex_numbers: card.dexIds,
+      national_pokedex_numbers: dexIds,
       number: card.number,
       printed_number: card.printedNumber ?? card.number,
       set_id: setUuid,
@@ -162,6 +163,40 @@ export class CatalogWriter {
     )
 
     return { id: cardId, created: !existing }
+  }
+
+  private async inferDexIds(name: string): Promise<number[]> {
+    const candidates = new Set<string>()
+    const cleaned = name.trim()
+    if (cleaned.length >= 3) candidates.add(cleaned)
+    const stripped = cleaned
+      .replace(/^mega\s+/i, '')
+      .replace(/\s+(?:ex|gx|vmax|vstar|v)$/i, '')
+      .trim()
+    if (stripped.length >= 3) candidates.add(stripped)
+    const first = stripped.split(/\s+/)[0]
+    if (first && first.length >= 4) candidates.add(first)
+
+    for (const candidate of candidates) {
+      const { data, error } = await this.db
+        .from('cards')
+        .select('national_pokedex_numbers')
+        .ilike('name', candidate)
+        .limit(40)
+      if (error || !data?.length) continue
+      const counts = new Map<number, number>()
+      for (const row of data) {
+        const dex = row.national_pokedex_numbers as number[] | null
+        if (!dex || dex.length !== 1) continue
+        counts.set(dex[0]!, (counts.get(dex[0]!) ?? 0) + 1)
+      }
+      const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])
+      const top = ranked[0]
+      if (!top) continue
+      if (ranked[1] && ranked[1][1] === top[1]) continue
+      return [top[0]]
+    }
+    return []
   }
 
   private async ensureSet(setSourceId: string): Promise<string | null> {
