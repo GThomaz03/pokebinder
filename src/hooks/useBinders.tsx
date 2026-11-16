@@ -31,6 +31,7 @@ import {
 } from '../lib/binderUtils'
 import { createRepositoryBinder } from '../lib/repositoryBinder'
 import { saveUserBinders } from '../lib/cloudStorage'
+import { syncPublishedSnapshots } from '../lib/social'
 import { useDebouncedEffect } from '../lib/useDebouncedEffect'
 import { useAuth } from './useAuth'
 import { useCloudSync } from './useCloudSync'
@@ -100,6 +101,7 @@ export function BindersProvider({ children }: { children: ReactNode }) {
   const [binders, setBinders] = useState<Binder[]>(load)
   const bindersRef = useRef(binders)
   bindersRef.current = binders
+  const publishGen = useRef(0)
   const { user, isAuthenticated } = useAuth()
   const { cloudReady, isCloudSavePaused } = useCloudSync()
 
@@ -117,9 +119,23 @@ export function BindersProvider({ children }: { children: ReactNode }) {
 
   useDebouncedEffect(() => {
     if (!isAuthenticated || !user || !cloudReady || isCloudSavePaused()) return
-    void saveUserBinders(user.id, binders).catch(() => {
+    const userId = user.id
+    const gen = ++publishGen.current
+    const snapshot = binders
+    void saveUserBinders(userId, snapshot).catch(() => {
       /* erros de sync são tratados no CloudSyncProvider em fluxos explícitos */
     })
+    void syncPublishedSnapshots(
+      userId,
+      snapshot.map((binder) => ({
+        type: 'binder' as const,
+        id: binder.id,
+        title: binder.name,
+        updatedAt: binder.updatedAt,
+        snapshot: binder,
+      })),
+      () => publishGen.current === gen,
+    ).catch(() => {})
   }, [binders, isAuthenticated, user?.id, cloudReady], 1500)
 
   const update = useCallback((id: string, fn: (b: Binder) => Binder) => {

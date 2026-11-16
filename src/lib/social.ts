@@ -1,4 +1,5 @@
 import type { Binder, Deck } from '../types'
+import { publishSyncKey, resourcesToRepublish } from './publishedSync'
 import { supabase } from './supabase'
 import {
   createShareLink,
@@ -344,6 +345,83 @@ export async function publishResourceToProfile(
 
   if (error) throw error
   return mapPublished(data)
+}
+
+const publishedPushedAt = new Map<string, number>()
+let publishedSyncQueue: Promise<void> = Promise.resolve()
+
+/**
+ * Keeps the public copy of a binder or deck in step with local edits.
+ * Publishing stores a snapshot; without this, the profile keeps the old one
+ * until the owner unpublishes and publishes again.
+ */
+export async function syncPublishedSnapshots(
+  userId: string,
+  resources: Array<{
+    type: ShareResourceType
+    id: string
+    title: string
+    updatedAt: number
+    snapshot: Binder | Deck
+  }>,
+  isCurrent: () => boolean = () => true,
+): Promise<void> {
+  const job = publishedSyncQueue.then(() => writePublishedSnapshots(userId, resources, isCurrent))
+  publishedSyncQueue = job.catch(() => {})
+  return job
+}
+
+async function writePublishedSnapshots(
+  userId: string,
+  resources: Array<{
+    type: ShareResourceType
+    id: string
+    title: string
+    updatedAt: number
+    snapshot: Binder | Deck
+  }>,
+  isCurrent: () => boolean,
+): Promise<void> {
+  if (!supabase || resources.length === 0 || !isCurrent()) return
+  const client = supabase
+  const { data, error } = await client
+    .from('published_resources')
+    .select('resource_type, resource_id, title')
+    .eq('owner_id', userId)
+  if (error || !isCurrent()) return
+
+  const due = resourcesToRepublish(
+    (data ?? []).map((row) => ({
+      resourceType: row.resource_type as string,
+      resourceId: row.resource_id as string,
+      title: (row.title as string | null) ?? null,
+    })),
+    resources,
+    publishedPushedAt,
+  )
+  const byKey = new Map(resources.map((item) => [publishSyncKey(item.type, item.id), item]))
+
+  await Promise.all(
+    due.map(async (item) => {
+      if (!isCurrent()) return
+      const full = byKey.get(publishSyncKey(item.type, item.id))
+      if (!full) return
+      const { error: shareErr } = await client
+        .from('share_links')
+        .update({ title: full.title, snapshot: full.snapshot })
+        .eq('owner_id', userId)
+        .eq('resource_type', full.type)
+        .eq('resource_id', full.id)
+      if (shareErr || !isCurrent()) return
+      const { error: titleErr } = await client
+        .from('published_resources')
+        .update({ title: full.title })
+        .eq('owner_id', userId)
+        .eq('resource_type', full.type)
+        .eq('resource_id', full.id)
+      if (!titleErr) publishedPushedAt.set(publishSyncKey(full.type, full.id), full.updatedAt)
+    }),
+  )
 }
 
 export async function unpublishResource(

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -18,6 +19,7 @@ import {
 } from '../lib/deckRules'
 import type { Deck, DeckEntry } from '../types'
 import { saveUserDecks } from '../lib/cloudStorage'
+import { syncPublishedSnapshots } from '../lib/social'
 import { useDebouncedEffect } from '../lib/useDebouncedEffect'
 import { useAuth } from './useAuth'
 import { useCloudSync } from './useCloudSync'
@@ -59,6 +61,7 @@ function touch(deck: Deck): Deck {
 
 export function DecksProvider({ children }: { children: ReactNode }) {
   const [decks, setDecks] = useState<Deck[]>(load)
+  const publishGen = useRef(0)
   const { getQty } = useInventory()
   const { user, isAuthenticated } = useAuth()
   const { cloudReady, isCloudSavePaused } = useCloudSync()
@@ -77,7 +80,21 @@ export function DecksProvider({ children }: { children: ReactNode }) {
 
   useDebouncedEffect(() => {
     if (!isAuthenticated || !user || !cloudReady || isCloudSavePaused()) return
-    void saveUserDecks(user.id, decks).catch(() => {})
+    const userId = user.id
+    const gen = ++publishGen.current
+    const snapshot = decks
+    void saveUserDecks(userId, snapshot).catch(() => {})
+    void syncPublishedSnapshots(
+      userId,
+      snapshot.map((deck) => ({
+        type: 'deck' as const,
+        id: deck.id,
+        title: deck.name,
+        updatedAt: deck.updatedAt,
+        snapshot: deck,
+      })),
+      () => publishGen.current === gen,
+    ).catch(() => {})
   }, [decks, isAuthenticated, user?.id, cloudReady], 1500)
 
   const update = useCallback((id: string, fn: (d: Deck) => Deck) => {
